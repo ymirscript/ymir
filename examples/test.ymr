@@ -1,0 +1,6 @@
+target JavaScript;
+
+router /api 
+{
+    GET /hello   
+}
