@@ -39,6 +39,8 @@ export class Lexer {
                     continue;
                 }
 
+                console.log(`Found ${rule.constructor.name} at ${this._context.sourcePosition} (${this._context.currentCharacter})`);
+
                 const result = rule.transform(this._context);
                 result.line = this._line;
                 tokens.push(result);

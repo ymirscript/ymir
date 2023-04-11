@@ -186,31 +186,74 @@ export class BooleanSyntaxRule implements ISyntaxRule {
 export class NumberSyntaxRule implements ISyntaxRule {
     
     isMatch(context: LexerContext): boolean {
-        const char = context.currentCharacter;
-        return char >= "0" && char <= "9" || char === "." || char === "e" || char === "-";
+        return this.isDigit(context.currentCharacter) 
+            || context.currentCharacter === "-" && this.isDigit(context.peek(1, true))
+            || context.currentCharacter === "+" && this.isDigit(context.peek(1, true))
+            || context.currentCharacter === "." && this.isDigit(context.peek(1, true))
+            || context.currentCharacter === "-" && this.checkForDot(context)
+            || context.currentCharacter === "+" && this.checkForDot(context);
     }
 
     transform(context: LexerContext): ISyntaxToken {
         const start = context.sourcePosition;
-        let length = 1;
-        context.jump(1);
+        const number = this.readNumber(context);
+        const length = number.length;
 
-        while (this.isValidNumberChar(context.currentCharacter)) {
-            length++;
-            context.jump(1);
-        }
-
-        const pos = new SourceSpan(start, length);
         return <INumericToken> {
             kind: SyntaxKind.NumericLiteral,
-            column: pos,
-            text: context.text.substring(start, length),
-            value: parseFloat(context.text.substring(start, length))
+            column: new SourceSpan(start, length),
+            text: number,
+            value: parseFloat(number)
         };
     }
 
-    private isValidNumberChar(char: string): boolean {
-        return char >= "0" && char <= "9" || char === "." || char === "e" || char === "-";
+    private readNumber(context: LexerContext): string {
+        let number = "";
+
+        if (context.currentCharacter === "-" || context.currentCharacter === "+") {
+            if (context.currentCharacter === "-") {
+                number += context.read(true);
+            } else {
+                context.read(true);
+            }
+        }
+
+        while (this.isDigit(context.currentCharacter)) {
+            number += context.read();
+        }
+
+        if (context.currentCharacter === ".") {
+            number += context.read();
+        }
+
+        while (this.isDigit(context.currentCharacter)) {
+            number += context.read();
+        }
+
+        if (context.currentCharacter !== "e" && context.currentCharacter !== "E") {
+            return number;
+        }
+
+        number += context.read();
+
+        if (context.currentCharacter === "-" || context.currentCharacter === "+") {
+            number += context.read();
+        }
+
+        while (this.isDigit(context.currentCharacter)) {
+            number += context.read();
+        }
+
+        return number;
+    }
+
+    private checkForDot(context: LexerContext): boolean {
+        const [char, index] = context.peekWithIndex(1, true);
+        return char === "." && this.isDigit(context.peek(index + 1));
+    }
+
+    private isDigit(char: string): boolean {
+        return char >= "0" && char <= "9";
     }
 }
 
@@ -251,6 +294,7 @@ export const RuleSet: ISyntaxRule[] = [
     new PatternSyntaxRule("target", SyntaxKind.TargetKeyword),
     new PatternSyntaxRule("use", SyntaxKind.UseKeyword),
     new PatternSyntaxRule("router", SyntaxKind.RouterKeyword),
+    new PatternSyntaxRule("include", SyntaxKind.IncludeKeyword),
     new PatternSyntaxRule("GET", SyntaxKind.GetMethodKeyword),
     new PatternSyntaxRule("POST", SyntaxKind.PostMethodKeyword),
     new PatternSyntaxRule("PUT", SyntaxKind.PutMethodKeyword),

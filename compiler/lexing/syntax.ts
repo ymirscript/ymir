@@ -66,6 +66,7 @@ export enum SyntaxKind {
     PatchMethodKeyword,
     HeadMethodKeyword,
     OptionsMethodKeyword,
+    IncludeKeyword,
     
     // Punctuation
     OpenBraceToken,
