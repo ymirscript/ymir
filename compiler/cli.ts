@@ -28,6 +28,8 @@ async function run(args: string[]): Promise<void> {
 
     const context = new CompilationContext(indexFile);
     Logger.info("Compiling %s", args[0]);
+
+    
 }
 
 await run(Deno.args);

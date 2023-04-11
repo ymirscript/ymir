@@ -21,10 +21,6 @@ export class Logger {
 
     public static log(level: LogLevel, message: string, ...args: unknown[]) {
         const [prefix, prefixStyle] = Logger.getLogLevelData(level);
-        Logger.logMessage(prefix, prefixStyle, message, ...args);
-    }
-
-    private static logMessage(prefix: string, prefixStyle: string, message: string, ...args: unknown[]) {
         const template = `%c${prefix}\t%c ${message}`;
         console.log(template, `color: ${prefixStyle}`, 'color: gray', ...args);
     }
