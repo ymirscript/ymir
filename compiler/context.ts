@@ -1,15 +1,16 @@
 import * as path from "https://deno.land/std@0.157.0/path/mod.ts";
 
-import { IPluginContext, IYmirFile, YmirFileKind } from "../library/mod.ts";
-import { ISyntaxToken } from "./lexing/tokens.ts";
+import { IPluginContext, IYmirFile, ProjectNode, YmirFileKind } from "../library/mod.ts";
 import { Lexer } from "./lexing/lexer.ts";
 import { Logger } from "./logger.ts";
+import { Parser, ParsingPolicy } from "./parsing/parser.ts";
+import { DiagnosticSink } from "./parsing/diagnostics.ts";
 
 export class CompilationContext implements IPluginContext {
 
     public readonly workingDirectory: string;
     public readonly indexFile: string;
-    private readonly _files: LexedYmirFile[];
+    private readonly _files: PreparedYmirFile[];
 
     constructor(indexFile: string) {
         this.indexFile = indexFile;
@@ -29,10 +30,22 @@ export class CompilationContext implements IPluginContext {
         const tokens = lexer.tokenize();
 
         Logger.success("Lexed %s", file.path);
+        Logger.info("Found %d tokens. Lets parse them...", tokens.length);
 
-        console.log(tokens);
+        const parser = new Parser(new DiagnosticSink(), ParsingPolicy.SkipErroredProject, tokens);
+        parser.setWorkingDirectory(this.workingDirectory);
+        const project = parser.parse();
 
-        this._files.push(new LexedYmirFile(file, tokens));
+        if (project === undefined) {
+            Logger.error("Failed to parse %s", file.path);
+            return;
+        }
+
+        Logger.success("Parsed %s", file.path);
+
+        this._files.push(new PreparedYmirFile(file, project));
+
+        console.log(JSON.stringify(project, null, 4));
     }
 
     public get files(): IYmirFile[] {
@@ -40,14 +53,14 @@ export class CompilationContext implements IPluginContext {
     }
 }
 
-export class LexedYmirFile {
+export class PreparedYmirFile {
 
     public readonly file: IYmirFile;
-    public readonly tokens: ISyntaxToken[];
+    public readonly project: ProjectNode;
 
-    constructor(file: IYmirFile, tokens: ISyntaxToken[]) {
+    constructor(file: IYmirFile, project: ProjectNode) {
         this.file = file;
-        this.tokens = tokens;
+        this.project = project;
     }
 
 }

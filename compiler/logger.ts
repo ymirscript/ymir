@@ -1,7 +1,20 @@
 /**
+ * The level of logging.
+ */
+export enum LogLevel {
+    Info,
+    Warning,
+    Error,
+    Success,
+    Debug,
+}
+
+/**
  * A utility class for logging message to the console for the compilation process.
  */
 export class Logger {
+
+    public static loglevel: LogLevel = LogLevel.Debug;
 
     public static info(message: string, ...args: unknown[]) {
         Logger.log(LogLevel.Info, message, ...args);
@@ -19,7 +32,15 @@ export class Logger {
         Logger.log(LogLevel.Success, message, ...args);
     }
 
-    public static log(level: LogLevel, message: string, ...args: unknown[]) {
+    public static debug(message: string, ...args: unknown[]) {
+        Logger.log(LogLevel.Debug, message, ...args);
+    }
+
+    public static log(level: LogLevel, message: string, ...args: unknown[]) {   
+        if (level > Logger.loglevel) {
+            return;
+        }
+
         const [prefix, prefixStyle] = Logger.getLogLevelData(level);
         const template = `%c${prefix}\t%c ${message}`;
         console.log(template, `color: ${prefixStyle}`, 'color: gray', ...args);
@@ -35,16 +56,8 @@ export class Logger {
                 return ['ERROR', 'red'];
             case LogLevel.Success:
                 return ['SUCCESS', 'green'];
+            case LogLevel.Debug:
+                return ['DEBUG', 'purple'];
         }
     }
-}
-
-/**
- * The level of logging.
- */
-export enum LogLevel {
-    Info,
-    Warning,
-    Error,
-    Success
 }

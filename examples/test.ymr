@@ -1,6 +1,14 @@
 target JavaScript;
 
+use env;
+
+use cors(
+	origin: @env.ALLOWED_ORIGIN
+);
+
 router /api 
 {
-    GET /hello   
+    GET /hello
+
+    include "include.ymr"
 }

@@ -70,7 +70,12 @@ export class PatternSyntaxRule implements ISyntaxRule {
             }
         }
 
-        return true;
+        const lookahead = context.peek(this._patternChars.length);
+        if (lookahead === " " || lookahead === "\t" || lookahead === "\r" || lookahead === "\n" || lookahead === "\0") {
+            return true;
+        }
+
+        return false;
     }
 
     transform(context: LexerContext): ISyntaxToken {
@@ -121,7 +126,7 @@ export class IdentifierSyntaxRule implements ISyntaxRule {
 
     isMatch(context: LexerContext): boolean {
         const char = context.currentCharacter;
-        return char >= "a" && char <= "z" || char >= "A" && char <= "Z" || char === "_";
+        return char >= "a" && char <= "z" || char >= "A" && char <= "Z" || char === "_" || char === "-" || char === "#";
     }
 
     transform(context: LexerContext): ISyntaxToken {
@@ -137,7 +142,7 @@ export class IdentifierSyntaxRule implements ISyntaxRule {
 
     private readIdentifier(context: LexerContext): string {
         let identifier = "";
-        while (this.isCharLetter(context.currentCharacter) || this.isCharNumber(context.currentCharacter) || context.currentCharacter === "_") {
+        while (this.isCharLetter(context.currentCharacter) || this.isCharNumber(context.currentCharacter) || context.currentCharacter === "_" || context.currentCharacter === "-" || context.currentCharacter === "#") {
             identifier += context.read();
         }
 
@@ -236,6 +241,7 @@ export class NumberSyntaxRule implements ISyntaxRule {
 
         number += context.read();
 
+        // @ts-ignore: read does move the cursor but deno thinks it doesn't
         if (context.currentCharacter === "-" || context.currentCharacter === "+") {
             number += context.read();
         }
@@ -263,26 +269,61 @@ export class NumberSyntaxRule implements ISyntaxRule {
 export class StringSyntaxRule implements ISyntaxRule {
 
     isMatch(context: LexerContext): boolean {
-        return context.currentCharacter === "\"";
+        return context.currentCharacter === "\"" || context.currentCharacter === "'";
     }
 
     transform(context: LexerContext): ISyntaxToken {
         const start = context.sourcePosition;
-        let length = 1;
-        context.jump(1);
+        const quote = context.read();
+        const text = this.readString(context, quote);
 
-        while (context.currentCharacter !== "\"" && context.currentCharacter !== "\0") {
-            length++;
-            context.jump(1);
+        if (text === undefined) {
+            throw new Error("Unterminated string literal");
         }
 
-        const pos = new SourceSpan(start, length);
-        return <IStringToken> {
+        return <IStringToken>{
             kind: SyntaxKind.StringLiteral,
-            column: pos,
-            text: context.text.substring(start, length),
-            value: context.text.substring(start + 1, length - 1)
+            column: new SourceSpan(start, text.length + 2),
+            text: quote + text + quote,
+            value: text
         };
+    }
+
+    private readString(context: LexerContext, quote: string): string|undefined {
+        let string = "";
+
+        let wasEscaped = false;
+        let errored = false;
+
+        while (true) {
+            const current = context.currentCharacter;
+
+            if (current === quote && !wasEscaped) {
+                break;
+            }
+
+            if (current === "\0") {
+                errored = true;
+                break;
+            }
+
+            if (current === "\\" && !wasEscaped) {
+                wasEscaped = true;
+                context.read();
+                continue;
+            }
+
+            wasEscaped = false;
+            string += context.read();
+        }
+
+        context.read();
+
+        if (errored) {
+            return undefined;
+        }
+
+        return string;
     }
 }
 
@@ -328,6 +369,7 @@ export const RuleSet: ISyntaxRule[] = [
     new CharSyntaxRule("^", SyntaxKind.CaretToken),
     new CharSyntaxRule("~", SyntaxKind.TildeToken),
     new CharSyntaxRule("@", SyntaxKind.AtToken),
+    new CharSyntaxRule("#", SyntaxKind.HashToken),
 
     new IdentifierSyntaxRule()
 ];

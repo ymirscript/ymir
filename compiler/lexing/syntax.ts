@@ -94,5 +94,6 @@ export enum SyntaxKind {
     AmpersandToken,
     BarToken,
     AtToken,
+    HashToken,
 
 }

@@ -1,6 +1,7 @@
 // deno-lint-ignore-file no-inferrable-types
 
 import { IYmirFile } from "../../library/mod.ts";
+import { Logger } from "../logger.ts";
 import { RuleSet } from "./rules.ts";
 import { SourceSpan, SyntaxKind } from "./syntax.ts";
 import { ISyntaxToken } from "./tokens.ts";
@@ -39,7 +40,7 @@ export class Lexer {
                     continue;
                 }
 
-                console.log(`Found ${rule.constructor.name} at ${this._context.sourcePosition} (${this._context.currentCharacter})`);
+                Logger.debug(`Found ${rule.constructor.name} at ${this._context.sourcePosition} (${this._context.currentCharacter})`);
 
                 const result = rule.transform(this._context);
                 result.line = this._line;
