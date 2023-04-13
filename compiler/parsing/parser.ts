@@ -1,8 +1,8 @@
 // deno-lint-ignore-file no-inferrable-types
 import * as pathApi from "https://deno.land/std@0.182.0/path/mod.ts";
 
-import { GlobalVariable, Method, MiddlewareNode, MiddlewareOptionValue, ProjectNode, RouteNode } from "../../library/mod.ts";
-import { MiddlewareOptions, RouterNode } from "../../library/script/nodes.ts";
+import { GlobalVariable, Method, MiddlewareNode, MiddlewareOptionValue, ProjectNode, QueryParameterType, RouteNode } from "../../library/mod.ts";
+import { MiddlewareOptions, PathNode, QueryParameterNode, RouterNode } from "../../library/script/nodes.ts";
 import { SourcePosition, SourceSpan, SyntaxKind } from "../lexing/syntax.ts";
 import { ISyntaxToken, IStringToken, INumericToken, IBooleanToken } from "../lexing/tokens.ts";
 import { Logger } from "../logger.ts";
@@ -310,22 +310,104 @@ export class Parser {
         return router;
     }
 
-    private parsePath(): string {
+    private parsePath(): PathNode {
         let path = "/";
+        let alias: string|undefined;
+        let queryParameters: QueryParameterNode[] = [];
 
         this._context.matchToken(SyntaxKind.SlashToken);
 
-        while (this._context.currentToken.kind === SyntaxKind.SlashToken || this._context.currentToken.kind === SyntaxKind.Identifier) {
-            if (this._context.currentToken.kind === SyntaxKind.SlashToken) {
-                path += "/";
-            } else {
-                path += this._context.currentToken.text;
-            }
+        while (this._context.currentToken.kind === SyntaxKind.SlashToken || this._context.currentToken.kind === SyntaxKind.Identifier || this._context.currentToken.kind === SyntaxKind.HashToken || this._context.currentToken.kind === SyntaxKind.MinusToken) {
+            path += this._context.currentToken.text;
 
             this._context.jump();
         }
 
-        return path;
+        if (this._context.currentToken.kind === SyntaxKind.QuestionToken) {
+            queryParameters = this.parseQueryParameters();
+        }
+
+        if (this._context.currentToken.kind === SyntaxKind.AsKeyword) {
+            this._context.jump();
+
+            alias = this._context.matchToken(SyntaxKind.Identifier).text;
+            // make sure the alias is a valid identifier for variable names in other languages
+            alias = alias.replace(/[^a-zA-Z0-9_]/g, "_").replace(/^[0-9]/, "_$&");
+        }
+
+        return new PathNode(path, alias, queryParameters);
+    }
+
+    private parseQueryParameters(): QueryParameterNode[] {
+        const parameters: QueryParameterNode[] = [];
+
+        while (this._context.currentToken.kind === SyntaxKind.QuestionToken || this._context.currentToken.kind === SyntaxKind.AmpersandToken) {
+            this._context.jump();
+
+            const parameter = this.parseQueryParameter();
+            if (parameter) {
+                parameters.push(parameter);
+            }
+        }
+
+        return parameters;
+    }
+
+    private parseQueryParameter(): QueryParameterNode|undefined {
+        const name = this._context.matchToken(SyntaxKind.Identifier).text;
+
+        if (this._context.currentToken.kind === SyntaxKind.EqualsToken) {
+            this._context.jump();
+
+            const type = this.parseQueryParameterType();
+
+            return new QueryParameterNode(name, type);
+        }
+    }
+
+    private parseQueryParameterType(): QueryParameterType {
+        const current = this._context.currentToken;
+
+        console.log(current);
+
+        switch (current.kind) {
+            case SyntaxKind.AnyTypeKeyword:
+                this._context.jump();
+                return QueryParameterType.Any;
+
+            case SyntaxKind.StringTypeKeyword:
+                this._context.jump();
+                return QueryParameterType.String;
+
+            case SyntaxKind.IntegerTypeKeyword:
+                this._context.jump();
+                return QueryParameterType.Int;
+
+            case SyntaxKind.FloatTypeKeyword:
+                this._context.jump();
+                return QueryParameterType.Float;
+
+            case SyntaxKind.BooleanTypeKeyword:
+                this._context.jump();
+                return QueryParameterType.Bool;
+
+            case SyntaxKind.DateTypeKeyword:
+                this._context.jump();
+                return QueryParameterType.Date;
+
+            case SyntaxKind.DateTimeTypeKeyword:
+                this._context.jump();
+                return QueryParameterType.DateTime;
+
+            case SyntaxKind.TimeTypeKeyword:
+                this._context.jump();
+                return QueryParameterType.Time;
+
+            default:
+                this._context.jump();
+                this.diagnostics.reportUnexpectedToken(current, [SyntaxKind.AnyTypeKeyword, SyntaxKind.StringTypeKeyword, SyntaxKind.IntegerTypeKeyword, SyntaxKind.FloatTypeKeyword, SyntaxKind.BooleanTypeKeyword, SyntaxKind.DateTypeKeyword, SyntaxKind.DateTimeTypeKeyword, SyntaxKind.TimeTypeKeyword]);
+                return QueryParameterType.Any;
+        }
     }
 
     private include(parent: RouterNode) {

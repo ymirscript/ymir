@@ -4,6 +4,69 @@
 export abstract class SyntaxNode {}
 
 /**
+ * Describes the allowed validation types for a query parameter.
+ */
+export enum QueryParameterType {
+    Any = "any",
+    String = "string",
+    Int = "int",
+    Float = "float",
+    Bool = "bool",
+    Date = "date",
+    DateTime = "datetime",
+    Time = "time"
+}
+
+/**
+ * The query parameter node describes a query parameter in a route.
+ */
+export class QueryParameterNode extends SyntaxNode {
+
+    /**
+     * The name of the query parameter.
+     */
+    public readonly name: string;
+    /**
+     * The type of the query parameter.
+     */
+    public readonly type: QueryParameterType;
+
+    constructor(name: string, type: QueryParameterType) {
+        super();
+        this.name = name;
+        this.type = type;
+    }
+}
+
+/**
+ * The path node is used to describe a path in the project.
+ */
+export class PathNode extends SyntaxNode {
+
+    /**
+     * The path of the path.
+     */
+    public readonly path: string;
+
+    /**
+     * The optional alias of the path. Used when compiling to target language as reference.
+     */
+    public readonly alias?: string;
+
+    /**
+     * An array of query parameters that are used in the path.
+     */
+    public readonly queryParameters: QueryParameterNode[];
+
+    constructor(path: string, alias: string|undefined, queryParameters: QueryParameterNode[]) {
+        super();
+        this.path = path;
+        this.alias = alias;
+        this.queryParameters = queryParameters;
+    }
+}
+
+/**
  * The router node describes a router in the project. It holds routes, middlewares and other information.
  */
 export class RouterNode extends SyntaxNode {
@@ -11,7 +74,7 @@ export class RouterNode extends SyntaxNode {
     /**
      * The base path of the router.
      */
-    public readonly path: string;
+    public readonly path: PathNode;
 
     /**
      * All routers that are children of this router.
@@ -28,7 +91,7 @@ export class RouterNode extends SyntaxNode {
      */
     public readonly middlewares: MiddlewareNode[];
 
-    constructor(path: string) {
+    constructor(path: PathNode) {
         super();
         this.path = path;
         this.routers = [];
@@ -44,7 +107,7 @@ export class RouterNode extends SyntaxNode {
 export class ScriptFileNode extends RouterNode {
     
     constructor() {
-        super("");
+        super(new PathNode("", undefined, []));
     }
 }
 
@@ -72,14 +135,14 @@ export class RouteNode extends SyntaxNode {
     /**
      * The path of the route.
      */
-    public readonly path: string;
+    public readonly path: PathNode;
 
     /**
      * The method of the route.
      */
     public readonly method: Method;
 
-    constructor(method: Method, path: string) {
+    constructor(method: Method, path: PathNode) {
         super();
         this.path = path;
         this.method = method;

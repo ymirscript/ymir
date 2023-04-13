@@ -7,8 +7,10 @@ use cors(
 );
 
 router /api 
+    as apiRouter
 {
-    GET /hello
+    GET /hello?name=string&age=int
+        as HelloRoute
 
     include "include.ymr"
 }

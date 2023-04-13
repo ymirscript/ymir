@@ -1,1 +1,2 @@
 GET /hello-from-another-file
+    as helloRouteAnotherFile

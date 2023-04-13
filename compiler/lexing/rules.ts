@@ -71,7 +71,8 @@ export class PatternSyntaxRule implements ISyntaxRule {
         }
 
         const lookahead = context.peek(this._patternChars.length);
-        if (lookahead === " " || lookahead === "\t" || lookahead === "\r" || lookahead === "\n" || lookahead === "\0") {
+
+        if (lookahead === " " || lookahead === "\t" || lookahead === "\r" || lookahead === "\n" || lookahead === "\0" || !lookahead.match(/^[a-zA-Z0-9_]+$/)) {
             return true;
         }
 
@@ -126,7 +127,7 @@ export class IdentifierSyntaxRule implements ISyntaxRule {
 
     isMatch(context: LexerContext): boolean {
         const char = context.currentCharacter;
-        return char >= "a" && char <= "z" || char >= "A" && char <= "Z" || char === "_" || char === "-" || char === "#";
+        return char >= "a" && char <= "z" || char >= "A" && char <= "Z" || char === "_";
     }
 
     transform(context: LexerContext): ISyntaxToken {
@@ -142,7 +143,7 @@ export class IdentifierSyntaxRule implements ISyntaxRule {
 
     private readIdentifier(context: LexerContext): string {
         let identifier = "";
-        while (this.isCharLetter(context.currentCharacter) || this.isCharNumber(context.currentCharacter) || context.currentCharacter === "_" || context.currentCharacter === "-" || context.currentCharacter === "#") {
+        while (this.isCharLetter(context.currentCharacter) || this.isCharNumber(context.currentCharacter) || context.currentCharacter === "_") {
             identifier += context.read();
         }
 
@@ -343,6 +344,15 @@ export const RuleSet: ISyntaxRule[] = [
     new PatternSyntaxRule("PATCH", SyntaxKind.PatchMethodKeyword),
     new PatternSyntaxRule("HEAD", SyntaxKind.HeadMethodKeyword),
     new PatternSyntaxRule("OPTIONS", SyntaxKind.OptionsMethodKeyword),
+    new PatternSyntaxRule("as", SyntaxKind.AsKeyword),
+    new PatternSyntaxRule("any", SyntaxKind.AnyTypeKeyword),
+    new PatternSyntaxRule("string", SyntaxKind.StringTypeKeyword),
+    new PatternSyntaxRule("float", SyntaxKind.FloatTypeKeyword),
+    new PatternSyntaxRule("int", SyntaxKind.IntegerTypeKeyword),
+    new PatternSyntaxRule("boolean", SyntaxKind.BooleanTypeKeyword),
+    new PatternSyntaxRule("datetime", SyntaxKind.DateTimeTypeKeyword),
+    new PatternSyntaxRule("date", SyntaxKind.DateTypeKeyword),
+    new PatternSyntaxRule("time", SyntaxKind.TimeTypeKeyword),
 
     new CharSyntaxRule("(", SyntaxKind.OpenParenToken),
     new CharSyntaxRule(")", SyntaxKind.CloseParenToken),

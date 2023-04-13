@@ -67,6 +67,15 @@ export enum SyntaxKind {
     HeadMethodKeyword,
     OptionsMethodKeyword,
     IncludeKeyword,
+    AsKeyword,
+    StringTypeKeyword,
+    IntegerTypeKeyword,
+    FloatTypeKeyword,
+    BooleanTypeKeyword,
+    AnyTypeKeyword,
+    DateTypeKeyword,
+    DateTimeTypeKeyword,
+    TimeTypeKeyword,
     
     // Punctuation
     OpenBraceToken,
