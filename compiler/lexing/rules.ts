@@ -72,7 +72,7 @@ export class PatternSyntaxRule implements ISyntaxRule {
 
         const lookahead = context.peek(this._patternChars.length);
 
-        if (lookahead === " " || lookahead === "\t" || lookahead === "\r" || lookahead === "\n" || lookahead === "\0" || !lookahead.match(/^[a-zA-Z0-9_]+$/)) {
+        if (lookahead === " " || lookahead === "\t" || lookahead === "\r" || lookahead === "\n" || lookahead === "\0" || !lookahead.match(/^[a-zA-Z0-9_-]+$/)) {
             return true;
         }
 
@@ -127,7 +127,7 @@ export class IdentifierSyntaxRule implements ISyntaxRule {
 
     isMatch(context: LexerContext): boolean {
         const char = context.currentCharacter;
-        return char >= "a" && char <= "z" || char >= "A" && char <= "Z" || char === "_";
+        return char >= "a" && char <= "z" || char >= "A" && char <= "Z" || char === "_" || char === "-";
     }
 
     transform(context: LexerContext): ISyntaxToken {
@@ -143,7 +143,7 @@ export class IdentifierSyntaxRule implements ISyntaxRule {
 
     private readIdentifier(context: LexerContext): string {
         let identifier = "";
-        while (this.isCharLetter(context.currentCharacter) || this.isCharNumber(context.currentCharacter) || context.currentCharacter === "_") {
+        while (this.isCharLetter(context.currentCharacter) || this.isCharNumber(context.currentCharacter) || context.currentCharacter === "_" || context.currentCharacter === "-") {
             identifier += context.read();
         }
 
@@ -337,6 +337,8 @@ export const RuleSet: ISyntaxRule[] = [
     new PatternSyntaxRule("use", SyntaxKind.UseKeyword),
     new PatternSyntaxRule("router", SyntaxKind.RouterKeyword),
     new PatternSyntaxRule("include", SyntaxKind.IncludeKeyword),
+    new PatternSyntaxRule("body", SyntaxKind.BodyKeyword),
+    new PatternSyntaxRule("header", SyntaxKind.HeaderKeyword),
     new PatternSyntaxRule("GET", SyntaxKind.GetMethodKeyword),
     new PatternSyntaxRule("POST", SyntaxKind.PostMethodKeyword),
     new PatternSyntaxRule("PUT", SyntaxKind.PutMethodKeyword),

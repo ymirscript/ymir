@@ -91,12 +91,28 @@ export class RouterNode extends SyntaxNode {
      */
     public readonly middlewares: MiddlewareNode[];
 
-    constructor(path: PathNode) {
+    /**
+     * Optional header validation schema defined through middleware options.
+     * 
+     * Every route in this router will inherit this header validation schema. If a route has its own header validation schema, it will be merged with this one.
+     */
+    public readonly header?: MiddlewareOptions;
+
+    /**
+     * Optional body validation schema defined through middleware options.
+     * 
+     * Every route in this router will inherit this body validation schema. If a route has its own body validation schema, it will be merged with this one.
+     */
+    public readonly body?: MiddlewareOptions;
+
+    constructor(path: PathNode, header?: MiddlewareOptions, body?: MiddlewareOptions) {
         super();
         this.path = path;
         this.routers = [];
         this.routes = [];
         this.middlewares = [];
+        this.header = header;
+        this.body = body;
     }
 }
 
@@ -142,10 +158,22 @@ export class RouteNode extends SyntaxNode {
      */
     public readonly method: Method;
 
-    constructor(method: Method, path: PathNode) {
+    /**
+     * Optional header validation schema defined through middleware options.
+     */
+    public readonly header?: MiddlewareOptions;
+
+    /**
+     * Optional body validation schema defined through middleware options.
+     */
+    public readonly body?: MiddlewareOptions;
+
+    constructor(method: Method, path: PathNode, header?: MiddlewareOptions, body?: MiddlewareOptions) {
         super();
         this.path = path;
         this.method = method;
+        this.header = header;
+        this.body = body;
     }
 }
 

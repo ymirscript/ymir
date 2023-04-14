@@ -8,9 +8,19 @@ use cors(
 
 router /api 
     as apiRouter
+    header (
+        X-API-Key: string
+    )
 {
-    GET /hello?name=string&age=int
+    GET /hello?name=string
         as HelloRoute
+
+    POST /person
+        as CreatePerson
+        body (
+            name: string,
+            age: int
+        )
 
     include "include.ymr"
 }

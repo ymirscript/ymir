@@ -76,6 +76,8 @@ export enum SyntaxKind {
     DateTypeKeyword,
     DateTimeTypeKeyword,
     TimeTypeKeyword,
+    BodyKeyword,
+    HeaderKeyword,
     
     // Punctuation
     OpenBraceToken,

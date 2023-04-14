@@ -150,6 +150,8 @@ export class Parser {
                     if (this._context.currentToken.kind === SyntaxKind.CommaToken) {
                         this._context.jump();
                     }
+                } else {
+                    this._context.jump();
                 }
             }
 
@@ -168,12 +170,15 @@ export class Parser {
                 return this.parseGlobalVariable();
 
             case SyntaxKind.StringLiteral:
+                this._context.jump();
                 return (<IStringToken>current).value;
 
             case SyntaxKind.NumericLiteral:
+                this._context.jump();
                 return (<INumericToken>current).value;
 
             case SyntaxKind.BooleanLiteral:
+                this._context.jump();
                 return (<IBooleanToken>current).value;
 
             case SyntaxKind.OpenBraceToken:
@@ -182,6 +187,17 @@ export class Parser {
             case SyntaxKind.OpenBracketToken:
                 return this.parseMiddlewareOptionArray();
 
+            case SyntaxKind.StringTypeKeyword:
+            case SyntaxKind.IntegerTypeKeyword:
+            case SyntaxKind.FloatTypeKeyword:
+            case SyntaxKind.BooleanTypeKeyword:
+            case SyntaxKind.AnyTypeKeyword:
+            case SyntaxKind.DateTimeTypeKeyword:
+            case SyntaxKind.DateTypeKeyword:
+            case SyntaxKind.TimeTypeKeyword:
+                this._context.jump();
+                return current.text;
+                
             default:
                 this.diagnostics.reportUnexpectedToken(current, [SyntaxKind.StringLiteral, SyntaxKind.NumericLiteral, SyntaxKind.BooleanLiteral, SyntaxKind.OpenBraceToken]);
                 return undefined;
@@ -249,9 +265,30 @@ export class Parser {
 
         const path = this.parsePath();
 
+        let body: MiddlewareOptions|undefined;
+        let header: MiddlewareOptions|undefined;
+
+        while (this._context.currentToken.kind === SyntaxKind.HeaderKeyword || this._context.currentToken.kind === SyntaxKind.BodyKeyword) {
+            const current = this._context.currentToken;
+
+            this._context.jump();
+
+            const start = this._context.currentToken;
+
+            if (current.kind === SyntaxKind.HeaderKeyword) {
+                header = this.parseMiddlewareOptions();
+            } else if (current.kind === SyntaxKind.BodyKeyword) {
+                body = this.parseMiddlewareOptions();
+            }
+
+            if (this._context.currentToken === start) {
+                this._context.jump();
+            }
+        }
+
         this._context.matchToken(SyntaxKind.SemicolonToken, true);
 
-        return new RouteNode(method, path);
+        return new RouteNode(method, path, header, body);
     }
 
     private parseMethod(): Method {
@@ -297,12 +334,39 @@ export class Parser {
 
         const path = this.parsePath();
 
+        let body: MiddlewareOptions|undefined;
+        let header: MiddlewareOptions|undefined;
+
+        while (this._context.currentToken.kind === SyntaxKind.HeaderKeyword || this._context.currentToken.kind === SyntaxKind.BodyKeyword) {
+            const current = this._context.currentToken;
+
+            this._context.jump();
+
+            const start = this._context.currentToken;
+
+            if (current.kind === SyntaxKind.HeaderKeyword) {
+                header = this.parseMiddlewareOptions();
+            } else if (current.kind === SyntaxKind.BodyKeyword) {
+                body = this.parseMiddlewareOptions();
+            }
+
+            if (this._context.currentToken === start) {
+                this._context.jump();
+            }
+        }
+
         this._context.matchToken(SyntaxKind.OpenBraceToken, true);
 
-        const router = new RouterNode(path);
+        const router = new RouterNode(path, header, body);
 
         while (this._context.currentToken.kind !== SyntaxKind.CloseBraceToken) {
+            const start = this._context.currentToken;
+
             this.parseRouterChildren(router);
+
+            if (this._context.currentToken === start) {
+                this._context.jump();
+            }
         }
 
         this._context.jump();
