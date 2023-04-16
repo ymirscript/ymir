@@ -15,7 +15,7 @@ export enum LogLevel {
  */
 export class Logger {
 
-    public static loglevel: LogLevel = LogLevel.Debug;
+    public static loglevel: LogLevel = LogLevel.Info;
 
     public static info(message: string, ...args: unknown[]) {
         Logger.log(LogLevel.Info, message, ...args);
@@ -27,6 +27,12 @@ export class Logger {
 
     public static error(message: string, ...args: unknown[]) {
         Logger.log(LogLevel.Error, message, ...args);
+    }
+
+    public static errorHint(pre: string, hint: string, post: string) {
+        const [prefix, prefixStyle] = Logger.getLogLevelData(LogLevel.Error);
+        const template = `%c${prefix}\t%c ${pre}%c${hint}%c${post}`;
+        console.log(template, `color: ${prefixStyle}`, 'color: gray', 'color: cyan', 'color: gray');
     }
 
     public static success(message: string, ...args: unknown[]) {

@@ -1,17 +1,19 @@
-import { IYmirFile } from "../../library/mod.ts";
-
 /**
  * Defines the position of a token in the source code.
  */
 export class SourcePosition {
-    public readonly file?: IYmirFile;
+    public readonly file?: string;
     public readonly line: SourceSpan;
     public readonly column: SourceSpan;
 
-    constructor(file: IYmirFile|undefined, line: SourceSpan, column: SourceSpan) {
+    constructor(file: string|undefined, line: SourceSpan, column: SourceSpan) {
         this.file = file;
         this.line = line;
         this.column = column;
+    }
+
+    public toString(): string {
+        return `${this.file ?? "<unknown>"}:${this.line.toString()}:${this.column.toString()}`;
     }
 }
 

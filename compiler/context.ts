@@ -5,17 +5,25 @@ import { Lexer } from "./lexing/lexer.ts";
 import { Logger } from "../library/mod.ts";
 import { Parser, ParsingPolicy } from "./parsing/parser.ts";
 import { DiagnosticSink } from "./parsing/diagnostics.ts";
+import { IYmirConfig, loadConfig } from "./config.ts";
+import { LogLevel } from "../library/logger.ts";
 
 export class CompilationContext implements IPluginContext {
 
     public readonly workingDirectory: string;
     public readonly outputDirectory: string;
+    public readonly diagnostics: DiagnosticSink|undefined;
+    public readonly config: IYmirConfig;
 
     private readonly _preparedIndexFile: PreparedYmirFile|undefined;
 
     constructor(indexFile: string) {
         this.workingDirectory = path.dirname(indexFile);
-        this.outputDirectory = path.join(this.workingDirectory, "build");
+        this.config = loadConfig(this.workingDirectory);
+
+        this.outputDirectory = path.join(this.workingDirectory, this.config.output!);
+
+        Logger.loglevel = this.config.debug ? LogLevel.Debug : LogLevel.Info;
 
         const file = {
             path: indexFile,
@@ -32,9 +40,12 @@ export class CompilationContext implements IPluginContext {
 
         const parser = new Parser(new DiagnosticSink(), ParsingPolicy.CancelParsingOnFirstError, tokens);
         parser.setWorkingDirectory(this.workingDirectory);
+        parser.setIndexFile(file.path);
         const project = parser.parse();
 
         if (project === undefined) {
+            this.diagnostics = parser.diagnostics;
+
             Logger.error("Failed to parse %s", file.path);
             return;
         }

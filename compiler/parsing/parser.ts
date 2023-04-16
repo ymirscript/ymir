@@ -33,6 +33,10 @@ export class Parser {
         this._workingDirectory = directory;
     }
 
+    public setIndexFile(file: string): void {
+        this._context.currentFiles.push(file);
+    }
+
     /**
      * Parses the tokens into a syntax-tree like structure resulting in a project node.
      * 
@@ -76,7 +80,7 @@ export class Parser {
      * Parses: `target <target>;`
      */
     private parseTarget(): string {
-        this._context.matchToken(SyntaxKind.TargetKeyword);
+        this._context.matchToken(SyntaxKind.TargetKeyword, false, "target");
 
         const target = this._context.matchToken(SyntaxKind.Identifier).text;
 
@@ -118,7 +122,7 @@ export class Parser {
      * or with options: `use <middleware>(origin: @env.test, something: "test", complex: { another: -10, b: true });`
      */
     private parseMiddleware(): MiddlewareNode {
-        this._context.matchToken(SyntaxKind.UseKeyword);
+        this._context.matchToken(SyntaxKind.UseKeyword, false, "use");
 
         const name = this._context.matchToken(SyntaxKind.Identifier).text;
 
@@ -139,7 +143,7 @@ export class Parser {
             // @ts-ignore: The cursor gets moved, the current token is not a open paren token anymore.
             while (this._context.currentToken.kind !== SyntaxKind.CloseParenToken) {
                 const key = this._context.matchToken(SyntaxKind.Identifier).text;
-                this._context.matchToken(SyntaxKind.ColonToken);
+                this._context.matchToken(SyntaxKind.ColonToken, false, ":");
 
                 const value = this.parseMiddlewareOptionValue();
                 if (value) {
@@ -221,7 +225,7 @@ export class Parser {
 
         while (this._context.currentToken.kind !== SyntaxKind.CloseBraceToken) {
             const key = this._context.matchToken(SyntaxKind.Identifier).text;
-            this._context.matchToken(SyntaxKind.ColonToken);
+            this._context.matchToken(SyntaxKind.ColonToken, false, ":");
 
             const value = this.parseMiddlewareOptionValue();
             if (value) {
@@ -329,7 +333,7 @@ export class Parser {
     }
 
     private parseRouter(): RouterNode {
-        this._context.matchToken(SyntaxKind.RouterKeyword);
+        this._context.matchToken(SyntaxKind.RouterKeyword, false, "router");
 
         const path = this.parsePath();
 
@@ -354,7 +358,7 @@ export class Parser {
             }
         }
 
-        this._context.matchToken(SyntaxKind.OpenBraceToken);
+        this._context.matchToken(SyntaxKind.OpenBraceToken, false, "{");
 
         const router = new RouterNode(path, header, body);
 
@@ -368,7 +372,7 @@ export class Parser {
             }
         }
 
-        this._context.matchToken(SyntaxKind.CloseBraceToken);
+        this._context.matchToken(SyntaxKind.CloseBraceToken, false, "}");
 
         return router;
     }
@@ -378,7 +382,7 @@ export class Parser {
         let alias: string|undefined;
         let queryParameters: QueryParameterNode[] = [];
 
-        this._context.matchToken(SyntaxKind.SlashToken);
+        this._context.matchToken(SyntaxKind.SlashToken, false, "/");
 
         while (this._context.currentToken.kind === SyntaxKind.SlashToken || this._context.currentToken.kind === SyntaxKind.Identifier || this._context.currentToken.kind === SyntaxKind.HashToken || this._context.currentToken.kind === SyntaxKind.MinusToken) {
             path += this._context.currentToken.text;
@@ -472,13 +476,16 @@ export class Parser {
     }
 
     private include(parent: RouterNode) {
-        this._context.matchToken(SyntaxKind.IncludeKeyword);
+        this._context.matchToken(SyntaxKind.IncludeKeyword, false, "include");
 
         const path = (<IStringToken>this._context.matchToken(SyntaxKind.StringLiteral)).value;
 
         this._context.matchToken(SyntaxKind.SemicolonToken, true);
+        this._context.currentFiles.push(path);
 
         this._include(parent, path);
+
+        this._context.currentFiles.pop();
     }
 
     private _include(parent: RouterNode, path: string) {
@@ -521,6 +528,8 @@ export class ParserContext {
     private readonly _tokens: ISyntaxToken[];
     private _position: number;
 
+    public currentFiles: string[] = [];
+
     constructor(diagnostics: DiagnosticSink, tokens: ISyntaxToken[]) {
         this._diagnostics = diagnostics;
         this._tokens = tokens;
@@ -539,6 +548,14 @@ export class ParserContext {
         return this.currentToken.kind !== SyntaxKind.EndOfFileToken;
     }
 
+    public get workingFile(): string|undefined {
+        if (this.currentFiles.length === 0) {
+            return undefined;
+        }
+
+        return this.currentFiles[this.currentFiles.length - 1];
+    }
+
     public peek(offset: number = 0): ISyntaxToken {
         return this._position + offset < this._tokens.length ? this._tokens[this._position + offset] : this._tokens[this._tokens.length - 1];
     }
@@ -553,7 +570,7 @@ export class ParserContext {
         return token;
     }
 
-    public matchToken(kind: SyntaxKind, optional: boolean = false): ISyntaxToken {
+    public matchToken(kind: SyntaxKind, optional: boolean = false, hint?: string): ISyntaxToken {
         const current = this.currentToken;
 
         Logger.debug("Matching kind: " + this._diagnostics.transformSyntaxKind(kind) + " with current kind: " + this._diagnostics.transformSyntaxKind(current.kind) + " value: " + current.text);
@@ -571,7 +588,7 @@ export class ParserContext {
             };
         }
 
-        this._diagnostics.reportError(new SourcePosition(undefined, new SourceSpan(current.line ?? - 1, 1), current.column), `Expected token of kind ${this._diagnostics.transformSyntaxKind(kind)} but got ${this._diagnostics.transformSyntaxKind(current.kind)} instead.`);
+        this._diagnostics.reportError(new SourcePosition(this.workingFile, new SourceSpan(current.line ?? - 1, 1), current.column), `Expected token of kind ${this._diagnostics.transformSyntaxKind(kind)} but got ${this._diagnostics.transformSyntaxKind(current.kind)} instead.`, hint);
 
         return {
             kind,

@@ -38,6 +38,10 @@ async function run(args: string[]): Promise<void> {
     const context = new CompilationContext(indexFile);
 
     if (!context.isIndexFilePrepared) {
+        if (context.diagnostics) {
+            context.diagnostics.print(context);
+        }
+
         Logger.fatal("Aborting.");
         return;
     }
