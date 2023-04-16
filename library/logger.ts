@@ -2,11 +2,12 @@
  * The level of logging.
  */
 export enum LogLevel {
+    Debug,
     Info,
+    Success,
     Warning,
     Error,
-    Success,
-    Debug,
+    Fatal,
 }
 
 /**
@@ -36,8 +37,12 @@ export class Logger {
         Logger.log(LogLevel.Debug, message, ...args);
     }
 
+    public static fatal(message: string, ...args: unknown[]) {
+        Logger.log(LogLevel.Fatal, message, ...args);
+    }
+
     public static log(level: LogLevel, message: string, ...args: unknown[]) {   
-        if (level > Logger.loglevel) {
+        if (level < Logger.loglevel) {
             return;
         }
 
@@ -58,6 +63,8 @@ export class Logger {
                 return ['SUCCESS', 'green'];
             case LogLevel.Debug:
                 return ['DEBUG', 'purple'];
+            case LogLevel.Fatal:
+                return ['FATAL', 'darkred'];
         }
     }
 }

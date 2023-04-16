@@ -1,11 +1,10 @@
 // deno-lint-ignore-file no-inferrable-types
 import * as pathApi from "https://deno.land/std@0.182.0/path/mod.ts";
 
-import { GlobalVariable, Method, MiddlewareNode, MiddlewareOptionValue, ProjectNode, QueryParameterType, RouteNode } from "../../library/mod.ts";
+import { GlobalVariable, Method, MiddlewareNode, MiddlewareOptionValue, ProjectNode, QueryParameterType, RouteNode, Logger } from "../../library/mod.ts";
 import { MiddlewareOptions, PathNode, QueryParameterNode, RouterNode } from "../../library/script/nodes.ts";
 import { SourcePosition, SourceSpan, SyntaxKind } from "../lexing/syntax.ts";
 import { ISyntaxToken, IStringToken, INumericToken, IBooleanToken } from "../lexing/tokens.ts";
-import { Logger } from "../logger.ts";
 import { DiagnosticSink } from "./diagnostics.ts";
 import { Lexer } from "../lexing/lexer.ts";
 import { YmirFileKind } from "../../library/script/file.ts";
@@ -431,8 +430,6 @@ export class Parser {
 
     private parseQueryParameterType(): QueryParameterType {
         const current = this._context.currentToken;
-
-        console.log(current);
 
         switch (current.kind) {
             case SyntaxKind.AnyTypeKeyword:

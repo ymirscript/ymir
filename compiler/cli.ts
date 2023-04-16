@@ -1,7 +1,17 @@
 import * as path from "https://deno.land/std@0.182.0/path/mod.ts";
 
 import { CompilationContext } from "./context.ts";
-import { Logger } from "./logger.ts";
+import { Logger, PluginBase } from "../library/mod.ts";
+
+import JavaScriptTargetPlugin from "../targets/javascript/plugin.ts";
+
+const plugins = [
+    new JavaScriptTargetPlugin(),
+];
+
+function getTargetPlugin(name: string): PluginBase | undefined {
+    return plugins.find(plugin => plugin.targetFor === name);
+}
 
 /**
  * Runs the compiler as CLI.
@@ -27,7 +37,22 @@ async function run(args: string[]): Promise<void> {
     
 
     const context = new CompilationContext(indexFile);
+
+    if (!context.isIndexFilePrepared) {
+        Logger.fatal("Aborting compilation.");
+        return;
+    }
+
     Logger.info("Compiling %s", args[0]);
+
+    const targetPlugin = getTargetPlugin(context.projectNode.target);
+
+    if (targetPlugin === undefined) {
+        Logger.fatal("No plugin for target %s found.", context.projectNode.target);
+        return;
+    }
+
+    targetPlugin.compile(context);
 }
 
 await run(Deno.args);

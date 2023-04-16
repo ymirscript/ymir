@@ -1,7 +1,6 @@
 // deno-lint-ignore-file no-inferrable-types
 
-import { IYmirFile } from "../../library/mod.ts";
-import { Logger } from "../logger.ts";
+import { IYmirFile, Logger } from "../../library/mod.ts";
 import { RuleSet } from "./rules.ts";
 import { SourceSpan, SyntaxKind } from "./syntax.ts";
 import { ISyntaxToken } from "./tokens.ts";

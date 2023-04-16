@@ -1,1 +1,1 @@
-deno run --allow-read compiler\cli.ts examples\test.ymr
+deno run --allow-read --allow-write compiler\cli.ts examples\test.ymr
