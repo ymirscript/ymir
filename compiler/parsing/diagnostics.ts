@@ -73,7 +73,7 @@ export class DiagnosticSink {
 
                         if (lineIndex === diagnostic.position.line.start) {
                             if (diagnostic.hint !== "") {
-                                Logger.errorHint(linePrefix + line.slice(0, diagnostic.position.column.start), diagnostic.hint, line.slice(diagnostic.position.column.start + diagnostic.position.column.length));
+                                Logger.errorHint(linePrefix + line.slice(0, diagnostic.position.column.start - 1), diagnostic.hint, line.slice(diagnostic.position.column.start - 1 + diagnostic.position.column.length));
                             } else {
                                 Logger.error(linePrefix + line);
                             }
@@ -82,6 +82,9 @@ export class DiagnosticSink {
                             Logger.error(linePrefix + line);
                         }
                     }
+
+                    console.log();
+                    console.log();
                 }
             }
         }
