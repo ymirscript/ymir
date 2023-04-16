@@ -3,10 +3,10 @@ import * as path from "https://deno.land/std@0.182.0/path/mod.ts";
 import { CompilationContext } from "./context.ts";
 import { Logger, PluginBase } from "../library/mod.ts";
 
-import JavaScriptTargetPlugin from "../targets/javascript/plugin.ts";
+import * as nodejs from "../targets/javascript/nodejs.ts";
 
 const plugins = [
-    new JavaScriptTargetPlugin(),
+    new nodejs.default(),
 ];
 
 function getTargetPlugin(name: string): PluginBase | undefined {
@@ -35,7 +35,6 @@ async function run(args: string[]): Promise<void> {
         return;
     }
     
-
     const context = new CompilationContext(indexFile);
 
     if (!context.isIndexFilePrepared) {
@@ -48,11 +47,15 @@ async function run(args: string[]): Promise<void> {
     const targetPlugin = getTargetPlugin(context.projectNode.target);
 
     if (targetPlugin === undefined) {
-        Logger.fatal("No plugin for target %s found.", context.projectNode.target);
+        Logger.fatal("No plugin for target \"%s\" found.", context.projectNode.target);
         return;
     }
 
+    await context.initBuildDir();
+
     targetPlugin.compile(context);
+
+    Logger.success("Compilation finished.");
 }
 
 await run(Deno.args);

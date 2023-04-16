@@ -44,10 +44,14 @@ export class CompilationContext implements IPluginContext {
         this._preparedIndexFile = new PreparedYmirFile(file, project);
     }
 
-    public initBuildDir() {
-        if (!Deno.statSync(this.outputDirectory).isDirectory) {
-            Deno.mkdirSync(this.outputDirectory);
+    public async initBuildDir(): Promise<void> {
+        if (await Deno.stat(this.outputDirectory).then(stat => stat.isDirectory).catch(() => false)) {
+            Logger.debug("Build directory already exists. Skipping creation.");
+            return;
         }
+
+        await Deno.mkdir(this.outputDirectory);
+        Logger.debug("Created build directory.");
     }
 
     public get isIndexFilePrepared(): boolean {

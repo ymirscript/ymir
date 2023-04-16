@@ -197,6 +197,24 @@ export class MiddlewareNode extends SyntaxNode {
         this.name = name;
         this.options = options;
     }
+
+    public getOption<T>(name: string, path: string[]): T|undefined {
+        // deno-lint-ignore no-explicit-any
+        let current: any = this.options;
+        for (const part of path) {
+            if (current[part] === undefined) {
+                return undefined;
+            }
+
+            current = current[part];
+        }
+
+        if (current[name] === undefined) {
+            return undefined;
+        }
+
+        return current[name] as T;
+    }
 }
 
 /**
