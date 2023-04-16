@@ -64,6 +64,26 @@ export class PathNode extends SyntaxNode {
         this.alias = alias;
         this.queryParameters = queryParameters;
     }
+
+    /**
+     * The name of the path. This is either the alias or the path with all non-alphanumeric characters removed.
+     */
+    public get name(): string {
+        if (this.alias !== undefined) {
+            return this.alias;
+        }
+
+        const normPath = this.path.replace(/[^a-zA-Z0-9_]/g, "");
+        if (normPath.length === 0) {
+            return "path" + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        }
+
+        if (normPath[0].match(/[0-9]/)) {
+            return "_" + normPath;
+        }
+
+        return normPath;
+    }
 }
 
 /**
