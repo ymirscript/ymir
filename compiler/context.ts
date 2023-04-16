@@ -30,7 +30,7 @@ export class CompilationContext implements IPluginContext {
         Logger.success("Lexed %s", file.path);
         Logger.info("Found %d tokens. Lets parse them...", tokens.length);
 
-        const parser = new Parser(new DiagnosticSink(), ParsingPolicy.SkipErroredProject, tokens);
+        const parser = new Parser(new DiagnosticSink(), ParsingPolicy.CancelParsingOnFirstError, tokens);
         parser.setWorkingDirectory(this.workingDirectory);
         const project = parser.parse();
 

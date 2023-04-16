@@ -354,11 +354,11 @@ export class Parser {
             }
         }
 
-        this._context.matchToken(SyntaxKind.OpenBraceToken, true);
+        this._context.matchToken(SyntaxKind.OpenBraceToken);
 
         const router = new RouterNode(path, header, body);
 
-        while (this._context.currentToken.kind !== SyntaxKind.CloseBraceToken) {
+        while (this._context.currentToken.kind !== SyntaxKind.CloseBraceToken && this._context.currentToken.kind !== SyntaxKind.EndOfFileToken) {
             const start = this._context.currentToken;
 
             this.parseRouterChildren(router);
@@ -368,7 +368,7 @@ export class Parser {
             }
         }
 
-        this._context.jump();
+        this._context.matchToken(SyntaxKind.CloseBraceToken);
 
         return router;
     }
@@ -584,12 +584,7 @@ export class ParserContext {
 
 export enum ParsingPolicy {
     /**
-     * The default policy. If an error is encountered, the parser will still finish the AST but won't add it to the list of parsed scripts. 
-     * The errors will be added to the diagnostic sink of the parser.
-     */
-    SkipErroredProject,
-    /**
-     * If an error is encountered, the parser will stop parsing the current script and will not add it to the list of parsed scripts.
+     * The default policy. If an error is encountered, the parser will stop parsing the current script and will not add it to the list of parsed scripts.
      */
     CancelParsingOnFirstError,
     /**
