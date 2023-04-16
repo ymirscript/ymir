@@ -44,6 +44,10 @@ export default class JavaScriptTargetPlugin extends PluginBase {
             "const isDatetime = isDate;",
             "const isTime = isDate;",
             "const isString = (str) => true;",
+            "const getHeader = (headers, name) => {",
+            "    const header = Object.keys(headers).find(key => key.toLowerCase() === name.toLowerCase());",
+            "    return header === undefined ? undefined : headers[header];",
+            "};",
             "",
             "const errorMessage = {",
             "    _400: \"Bad Request: Field {field} of type {type} is required\",",
@@ -51,7 +55,6 @@ export default class JavaScriptTargetPlugin extends PluginBase {
             "    _403: \"Forbidden: You are not allowed to access this resource\",",
             "    _404: \"Not Found: The requested resource could not be found\",",
             "    _500: \"Internal Server Error: An internal server error occurred\",",
-            "    _501: \"Not Implemented: The requested method is not implemented\",",
             "    Started: \"Server started on port {port}...\",",
             "};",
             "",
@@ -142,7 +145,7 @@ export default class JavaScriptTargetPlugin extends PluginBase {
                 routerBuildFunctionLines.push("});");
             }
 
-            routerBuildFunctionLines.push(`${parentName}.use(${routerName});`);
+            routerBuildFunctionLines.push(`${parentName}.use("${routerNode.path.path}", ${routerName});`);
         }
 
         if (routerNode.routers.length > 0) {
@@ -205,9 +208,6 @@ export default class JavaScriptTargetPlugin extends PluginBase {
         output.push(`async ${handlerName}(req, res) {`);
 
         output.push(...this.generateValidationCode(route.header, route.body, route.path));
-
-        output.push(`    // TODO: Implement handler for route "${route.path.path}"`);
-        output.push(`    res.status(501).send(errorMessage._501);`);
         output.push(`}`);
 
 
@@ -225,8 +225,20 @@ export default class JavaScriptTargetPlugin extends PluginBase {
             output.push("");
             output.push(`    const header = req.headers;`);
 
-            const headerValidation = this.generateDeepObjectValidation("header", header);
-            output.push(...headerValidation.map((line) => line));
+            for (const key in header) {
+                if (!(header[key] instanceof Object)) {
+                    output.push(`    if (getHeader(header, "${key}") === undefined) {`);
+                    output.push(`        res.status(400);`);
+                    output.push(`        throw new Error(errorMessage._400.replace("{field}", "header.${key}").replace("{type}", "${header[key]}"));`);
+                    output.push(`    }`);
+                    // @ts-ignore - we can assume, that the schema value is of string type, cause for schema validation only objects and strings are allowed
+                    output.push(`    if (!is${header[key].charAt(0).toUpperCase() + header[key].slice(1)}(getHeader(header, "${key}"))) {`);
+                    output.push(`        res.status(400);`);
+                    output.push(`        throw new Error(errorMessage._400.replace("{field}", "header.${key}").replace("{type}", "${header[key]}"));`);
+                    output.push(`    }`);
+                    output.push("");
+                }
+            }
         }
         
         if (path.queryParameters.length > 0) {

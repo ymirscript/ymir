@@ -18,6 +18,10 @@ const isDate = (str) => {
 const isDatetime = isDate;
 const isTime = isDate;
 const isString = (str) => true;
+const getHeader = (headers, name) => {
+    const header = Object.keys(headers).find(key => key.toLowerCase() === name.toLowerCase());
+    return header === undefined ? undefined : headers[header];
+};
 
 const errorMessage = {
     _400: "Bad Request: Field {field} of type {type} is required",
@@ -102,11 +106,11 @@ class YmirRestBase {
                 }
             
                 const header = req.headers;
-                if (header["X-API-Key"] === undefined) {
+                if (getHeader(header, "X-API-Key") === undefined) {
                     res.status(400);
                     throw new Error(errorMessage._400.replace("{field}", "header.X-API-Key").replace("{type}", "string"));
                 }
-                if (!isString(header["X-API-Key"])) {
+                if (!isString(getHeader(header, "X-API-Key"))) {
                     res.status(400);
                     throw new Error(errorMessage._400.replace("{field}", "header.X-API-Key").replace("{type}", "string"));
                 }
@@ -116,7 +120,7 @@ class YmirRestBase {
                 next(e);
             }
         });
-        app.use(apiRouter);
+        app.use("/api", apiRouter);
         // Routes
         apiRouter.get("/hello", this.onApiRouterHelloRoute.bind(this));
         apiRouter.post("/person", this.onApiRouterCreatePerson.bind(this));
