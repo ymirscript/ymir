@@ -7,7 +7,6 @@ export default class JavaScriptTargetPlugin extends PluginBase {
     private _middlewareHandlers: Map<string, (router: string, node: MiddlewareNode) => string[]> = new Map();
     private _exports: string[] = ["startServer", "messages", "YmirRestBase"];
     private _wasEnvUsed = false;
-    private _wasAsyncUsed = false;
     private readonly _authHandlers: Record<string, string> = {};
 
     public get targetFor(): string | undefined {
@@ -235,7 +234,6 @@ export default class JavaScriptTargetPlugin extends PluginBase {
 
         switch (authBlock.type) {
             case AuthType.APIKey:
-                this._wasAsyncUsed = true;
                 this._authHandlers[authBlock.id] = authBlock.name; 
 
                 output.push(...[
