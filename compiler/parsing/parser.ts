@@ -1,13 +1,11 @@
 // deno-lint-ignore-file no-inferrable-types
 import * as pathApi from "https://deno.land/std@0.182.0/path/mod.ts";
 
-import { GlobalVariable, Method, MiddlewareNode, MiddlewareOptionValue, ProjectNode, QueryParameterType, RouteNode, Logger } from "../../library/mod.ts";
-import { MiddlewareOptions, PathNode, QueryParameterNode, RouterNode } from "../../library/script/nodes.ts";
+import { GlobalVariable, Method, MiddlewareNode, MiddlewareOptionValue, ProjectNode, QueryParameterType, RouteNode, Logger, MiddlewareOptions, PathNode, QueryParameterNode, RouterNode, YmirFileKind, AuthBlockNode, AuthType, AuthenticateClauseNode } from "../../library/mod.ts";
 import { SourcePosition, SourceSpan, SyntaxKind } from "../lexing/syntax.ts";
 import { ISyntaxToken, IStringToken, INumericToken, IBooleanToken } from "../lexing/tokens.ts";
 import { DiagnosticSink } from "./diagnostics.ts";
 import { Lexer } from "../lexing/lexer.ts";
-import { YmirFileKind } from "../../library/script/file.ts";
 
 /**
  * The parser takes a list of tokens and parses them into a syntax tree like structure to pass to the compilation modules.
@@ -57,7 +55,7 @@ export class Parser {
     private parseProject(): ProjectNode {
         const target = this.parseTarget();
 
-        const projectNode = new ProjectNode(target);
+        const projectNode = new ProjectNode(target, {});
 
         this.parseParentNode(projectNode);
         
@@ -114,7 +112,84 @@ export class Parser {
             case SyntaxKind.IncludeKeyword:
                 this.include(routerNode);
                 break;
+
+            case SyntaxKind.AuthKeyword:
+                if (routerNode instanceof ProjectNode) {
+                    const authBlock = this.parseAuthBlock();
+                    if (!authBlock) {
+                        return;
+                    }
+
+                    if (routerNode.authBlocks[authBlock.id]) {
+                        this.diagnostics.reportError(new SourcePosition(this._context.workingFile, new SourceSpan(current.line ?? - 1, 1), current.column), `auth block with id '${authBlock.id}' already exists.`);
+                    } else {
+                        routerNode.authBlocks[authBlock.id] = authBlock;
+                    }
+                } else {
+                    this.diagnostics.reportError(new SourcePosition(this._context.workingFile, new SourceSpan(current.line ?? - 1, 1), current.column), "auth can only be used in the project node.");
+                }
+                break;
         }
+    }
+
+    private parseAuthBlock(): AuthBlockNode|undefined {
+        this._context.jump();
+
+        const type = this._context.matchToken(SyntaxKind.Identifier).text as AuthType;
+        if (Object.values(AuthType).indexOf(type) === -1) {
+            this.diagnostics.reportError(new SourcePosition(this._context.workingFile, new SourceSpan(this._context.currentToken.line ?? - 1, 1), this._context.currentToken.column), `auth type '${type}' does not exist.`);
+            return undefined;
+        }
+
+        let body: MiddlewareOptions = {};
+        let alias: string = "";
+
+        if (this._context.currentToken.kind === SyntaxKind.OpenParenToken) {
+            body = this.parseMiddlewareOptions();
+
+            // @ts-ignore: The cursor gets moved in the parseMiddlewareOptions method, the current token is not a open paren token anymore.
+            if (this._context.currentToken.kind === SyntaxKind.AsKeyword) {
+                this._context.jump();
+
+                alias = this._context.matchToken(SyntaxKind.Identifier).text;
+            }
+        } else if (this._context.currentToken.kind === SyntaxKind.AsKeyword) {
+            this._context.jump();
+
+            alias = this._context.matchToken(SyntaxKind.Identifier).text;
+
+            // @ts-ignore: The cursor gets moved in the parseMiddlewareOptions method, the current token is not a open paren token anymore.
+            if (this._context.currentToken.kind === SyntaxKind.OpenParenToken) {
+                body = this.parseMiddlewareOptions();
+            } else {
+                this.diagnostics.reportError(new SourcePosition(this._context.workingFile, new SourceSpan(this._context.currentToken.line ?? - 1, 1), this._context.currentToken.column), "A auth block must have a body.", "(");
+                return undefined;
+            }
+        }
+
+        this._context.matchToken(SyntaxKind.SemicolonToken, true);
+
+        if (!body["source"] || (body["source"] !== "header" && body["source"] !== "query" && body["source"] !== "body")) {
+            this.diagnostics.reportError(new SourcePosition(this._context.workingFile, new SourceSpan(this._context.currentToken.line ?? - 1, 1), this._context.currentToken.column), "A auth block must have a source.", "source: header|query|body");
+            return undefined;
+        }
+
+        if (!body["field"] || typeof body["field"] !== "string") {
+            this.diagnostics.reportError(new SourcePosition(this._context.workingFile, new SourceSpan(this._context.currentToken.line ?? - 1, 1), this._context.currentToken.column), "A auth block must have a field.", "field: <string>");
+            return undefined;
+        }
+
+        let defaultAccess: "public"|"authenticated" = "public";
+        if (body["defaultAccess"]) {
+            if (body["defaultAccess"] === "public" || body["defaultAccess"] === "authenticated") {
+                defaultAccess = body["defaultAccess"];
+            } else {
+                this.diagnostics.reportError(new SourcePosition(this._context.workingFile, new SourceSpan(this._context.currentToken.line ?? - 1, 1), this._context.currentToken.column), "A auth block must have a valid defaultAccess.", "defaultAccess: public|authenticated");
+                return undefined;
+            }
+        }
+
+        return new AuthBlockNode(type, body["source"], body["field"], alias, defaultAccess);
     }
 
     /**
@@ -198,11 +273,16 @@ export class Parser {
             case SyntaxKind.DateTimeTypeKeyword:
             case SyntaxKind.DateTypeKeyword:
             case SyntaxKind.TimeTypeKeyword:
+            case SyntaxKind.HeaderKeyword:
+            case SyntaxKind.QueryKeyword:
+            case SyntaxKind.BodyKeyword:
+            case SyntaxKind.PublicKeyword:
+            case SyntaxKind.AuthenticatedKeyword:
                 this._context.jump();
                 return current.text;
                 
             default:
-                this.diagnostics.reportUnexpectedToken(current, [SyntaxKind.StringLiteral, SyntaxKind.NumericLiteral, SyntaxKind.BooleanLiteral, SyntaxKind.OpenBraceToken]);
+                this.diagnostics.reportUnexpectedToken(current, [SyntaxKind.StringLiteral, SyntaxKind.NumericLiteral, SyntaxKind.BooleanLiteral, SyntaxKind.OpenBraceToken], undefined, this._context.workingFile);
                 return undefined;
         }
     }
@@ -270,8 +350,11 @@ export class Parser {
 
         let body: MiddlewareOptions|undefined;
         let header: MiddlewareOptions|undefined;
+        let authenticate: AuthenticateClauseNode|undefined;
 
-        while (this._context.currentToken.kind === SyntaxKind.HeaderKeyword || this._context.currentToken.kind === SyntaxKind.BodyKeyword) {
+        while (this._context.currentToken.kind === SyntaxKind.HeaderKeyword 
+            || this._context.currentToken.kind === SyntaxKind.BodyKeyword
+            || this._context.currentToken.kind === SyntaxKind.AuthenticateKeyword) {
             const current = this._context.currentToken;
 
             this._context.jump();
@@ -282,6 +365,8 @@ export class Parser {
                 header = this.parseMiddlewareOptions();
             } else if (current.kind === SyntaxKind.BodyKeyword) {
                 body = this.parseMiddlewareOptions();
+            } else if (current.kind === SyntaxKind.AuthenticateKeyword) {
+                authenticate = this.parseAuthenticateClause();
             }
 
             if (this._context.currentToken === start) {
@@ -291,7 +376,44 @@ export class Parser {
 
         this._context.matchToken(SyntaxKind.SemicolonToken, true);
 
-        return new RouteNode(method, path, header, body);
+        return new RouteNode(method, path, header, body, authenticate);
+    }
+
+    private parseAuthenticateClause(): AuthenticateClauseNode {
+        let authBlock: string|undefined;
+        let authorization: string[]|undefined;
+
+        if (this._context.currentToken.kind === SyntaxKind.Identifier) {
+            authBlock = this._context.matchToken(SyntaxKind.Identifier, false, "<string>").text;
+        }
+
+        if (this._context.currentToken.kind === SyntaxKind.WithKeyword) {
+            this._context.jump();
+            authorization = [];
+
+            // @ts-ignore: The cursor was moved.
+            if (this._context.currentToken.kind === SyntaxKind.StringLiteral) {
+                authorization.push((<IStringToken>this._context.matchToken(SyntaxKind.StringLiteral, false, "<string>")).value);
+                
+            // @ts-ignore: The cursor was moved.
+            } else if (this._context.currentToken.kind === SyntaxKind.OpenBracketToken) {
+                this._context.jump();
+
+                while (this._context.currentToken.kind !== SyntaxKind.CloseBracketToken && this._context.currentToken.kind !== SyntaxKind.EndOfFileToken) {
+                    authorization.push((<IStringToken>this._context.matchToken(SyntaxKind.StringLiteral, false, "<string>")).value);
+
+                    if (this._context.currentToken.kind === SyntaxKind.CommaToken) {
+                        this._context.jump();
+                    }
+                }
+
+                this._context.jump();
+            } else {
+                this.diagnostics.reportUnexpectedToken(this._context.currentToken, [SyntaxKind.StringLiteral, SyntaxKind.OpenBracketToken], undefined, this._context.workingFile);
+            }
+        }
+
+        return new AuthenticateClauseNode(authBlock, authorization);
     }
 
     private parseMethod(): Method {
@@ -327,7 +449,7 @@ export class Parser {
                 return Method.Options;
 
             default:
-                this.diagnostics.reportUnexpectedToken(current, [SyntaxKind.GetMethodKeyword, SyntaxKind.PostMethodKeyword, SyntaxKind.PutMethodKeyword, SyntaxKind.DeleteMethodKeyword, SyntaxKind.PatchMethodKeyword, SyntaxKind.HeadMethodKeyword, SyntaxKind.OptionsMethodKeyword]);
+                this.diagnostics.reportUnexpectedToken(current, [SyntaxKind.GetMethodKeyword, SyntaxKind.PostMethodKeyword, SyntaxKind.PutMethodKeyword, SyntaxKind.DeleteMethodKeyword, SyntaxKind.PatchMethodKeyword, SyntaxKind.HeadMethodKeyword, SyntaxKind.OptionsMethodKeyword], undefined, this._context.workingFile);
                 return Method.Get;
         }
     }
@@ -339,8 +461,11 @@ export class Parser {
 
         let body: MiddlewareOptions|undefined;
         let header: MiddlewareOptions|undefined;
+        let authenticate: AuthenticateClauseNode|undefined;
 
-        while (this._context.currentToken.kind === SyntaxKind.HeaderKeyword || this._context.currentToken.kind === SyntaxKind.BodyKeyword) {
+        while (this._context.currentToken.kind === SyntaxKind.HeaderKeyword 
+            || this._context.currentToken.kind === SyntaxKind.BodyKeyword
+            || this._context.currentToken.kind === SyntaxKind.AuthenticateKeyword) {
             const current = this._context.currentToken;
 
             this._context.jump();
@@ -351,6 +476,8 @@ export class Parser {
                 header = this.parseMiddlewareOptions();
             } else if (current.kind === SyntaxKind.BodyKeyword) {
                 body = this.parseMiddlewareOptions();
+            } else if (current.kind === SyntaxKind.AuthenticateKeyword) {
+                authenticate = this.parseAuthenticateClause();
             }
 
             if (this._context.currentToken === start) {
@@ -360,7 +487,7 @@ export class Parser {
 
         this._context.matchToken(SyntaxKind.OpenBraceToken, false, "{");
 
-        const router = new RouterNode(path, header, body);
+        const router = new RouterNode(path, header, body, authenticate);
 
         while (this._context.currentToken.kind !== SyntaxKind.CloseBraceToken && this._context.currentToken.kind !== SyntaxKind.EndOfFileToken) {
             const start = this._context.currentToken;
@@ -470,7 +597,7 @@ export class Parser {
 
             default:
                 this._context.jump();
-                this.diagnostics.reportUnexpectedToken(current, [SyntaxKind.AnyTypeKeyword, SyntaxKind.StringTypeKeyword, SyntaxKind.IntegerTypeKeyword, SyntaxKind.FloatTypeKeyword, SyntaxKind.BooleanTypeKeyword, SyntaxKind.DateTypeKeyword, SyntaxKind.DateTimeTypeKeyword, SyntaxKind.TimeTypeKeyword]);
+                this.diagnostics.reportUnexpectedToken(current, [SyntaxKind.AnyTypeKeyword, SyntaxKind.StringTypeKeyword, SyntaxKind.IntegerTypeKeyword, SyntaxKind.FloatTypeKeyword, SyntaxKind.BooleanTypeKeyword, SyntaxKind.DateTypeKeyword, SyntaxKind.DateTimeTypeKeyword, SyntaxKind.TimeTypeKeyword], undefined, this._context.workingFile);
                 return QueryParameterType.Any;
         }
     }

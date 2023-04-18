@@ -3,7 +3,7 @@ import * as path from "https://deno.land/std@0.182.0/path/mod.ts";
 import { CompilationContext } from "./context.ts";
 import { Logger, PluginBase } from "../library/mod.ts";
 
-import * as nodejs from "../targets/javascript/nodejs.ts";
+import * as nodejs from "../targets/javascript/expressjs.ts";
 
 const plugins = [
     new nodejs.default(),
@@ -57,7 +57,9 @@ async function run(args: string[]): Promise<void> {
 
     await context.initBuildDir();
 
-    targetPlugin.compile(context);
+    console.log(JSON.stringify(context.projectNode, null, 4));
+
+    //targetPlugin.compile(context);
 
     Logger.success("Compilation finished.");
 }

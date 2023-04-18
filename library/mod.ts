@@ -1,4 +1,4 @@
-export { SyntaxNode, RouterNode, ScriptFileNode, ProjectNode, RouteNode, MiddlewareNode, Method, GlobalVariable, PathNode, QueryParameterNode, QueryParameterType } from "./script/nodes.ts";
+export { SyntaxNode, RouterNode, ScriptFileNode, ProjectNode, RouteNode, MiddlewareNode, Method, GlobalVariable, PathNode, QueryParameterNode, QueryParameterType, AuthBlockNode, AuthType, AuthenticateClauseNode } from "./script/nodes.ts";
 export type { MiddlewareOptions, MiddlewareOptionValue } from "./script/nodes.ts";
 
 export { YmirFileKind } from "./script/file.ts";

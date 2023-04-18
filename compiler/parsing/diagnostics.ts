@@ -36,8 +36,8 @@ export class DiagnosticSink {
         this._diagnostics.push(new Diagnostic(DiagnosticSeverity.Warning, position, message));
     }
 
-    public reportUnexpectedToken(current: ISyntaxToken, expected: SyntaxKind[], hint?: string): void {
-        this._diagnostics.push(new Diagnostic(DiagnosticSeverity.Error, new SourcePosition(undefined, new SourceSpan(current.line ?? -1, 0), current.column), `Expected token of kind ${expected.map(e => this.transformSyntaxKind(e)).join(" or ")} but got ${this.transformSyntaxKind(current.kind)} instead.`, hint));
+    public reportUnexpectedToken(current: ISyntaxToken, expected: SyntaxKind[], hint?: string, file?: string): void {
+        this._diagnostics.push(new Diagnostic(DiagnosticSeverity.Error, new SourcePosition(file, new SourceSpan(current.line ?? -1, 0), current.column), `Expected token of kind ${expected.map(e => this.transformSyntaxKind(e)).join(" or ")} but got ${this.transformSyntaxKind(current.kind)} instead.`, hint));
     }
 
     public report(...diagnostics: Diagnostic[]): void {

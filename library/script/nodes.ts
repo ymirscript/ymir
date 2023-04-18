@@ -125,7 +125,12 @@ export class RouterNode extends SyntaxNode {
      */
     public readonly body?: MiddlewareOptions;
 
-    constructor(path: PathNode, header?: MiddlewareOptions, body?: MiddlewareOptions) {
+    /**
+     * The authenticator that is used for this route.
+     */
+    public readonly authenticate?: AuthenticateClauseNode;
+
+    constructor(path: PathNode, header?: MiddlewareOptions, body?: MiddlewareOptions, authenticate?: AuthenticateClauseNode) {
         super();
         this.path = path;
         this.routers = [];
@@ -133,6 +138,7 @@ export class RouterNode extends SyntaxNode {
         this.middlewares = [];
         this.header = header;
         this.body = body;
+        this.authenticate = authenticate;
     }
 }
 
@@ -157,9 +163,15 @@ export class ProjectNode extends ScriptFileNode {
      */
     public readonly target: string;
 
-    constructor(target: string) {
+    /**
+     * The authenticators that are used in the project.
+     */
+    public readonly authBlocks: { [key: AuthType|string]: AuthBlockNode; }
+
+    constructor(target: string, authBlocks: { [key: AuthType|string]: AuthBlockNode; }) {
         super();
         this.target = target;
+        this.authBlocks = authBlocks;
     }
 }
 
@@ -188,12 +200,85 @@ export class RouteNode extends SyntaxNode {
      */
     public readonly body?: MiddlewareOptions;
 
-    constructor(method: Method, path: PathNode, header?: MiddlewareOptions, body?: MiddlewareOptions) {
+    /**
+     * The authenticator that is used for this route.
+     */
+    public readonly authenticate?: AuthenticateClauseNode;
+
+    constructor(method: Method, path: PathNode, header?: MiddlewareOptions, body?: MiddlewareOptions, authenticate?: AuthenticateClauseNode) {
         super();
         this.path = path;
         this.method = method;
         this.header = header;
         this.body = body;
+        this.authenticate = authenticate;
+    }
+}
+
+/**
+ * The auth block node describes the basic information about the authentication process.
+ */
+export class AuthBlockNode extends SyntaxNode {
+
+    /**
+     * The alias of the authenticator that is used.
+     */
+    public readonly alias?: string;
+
+    /**
+     * The type of the authentication process.
+     */
+    public readonly type: AuthType;
+
+    /**
+     * The source from which the authentication information is taken.
+     */
+    public readonly source: "header"|"body"|"query";
+
+    /**
+     * The name of the field that is used for authentication.
+     */
+    public readonly field: string;
+
+    /**
+     * Whether the default access is public or not.
+     */
+    public readonly isDefaultAccessPublic?: boolean;
+
+    constructor(type: AuthType, source: "header"|"body"|"query", field: string, alias?: string, isDefaultAccessPublic?: "public"|"authenticated") {
+        super();
+        this.type = type;
+        this.source = source;
+        this.field = field;
+        this.alias = alias;
+        this.isDefaultAccessPublic = isDefaultAccessPublic === "authenticated" ? false : true;
+    }
+
+    public get id(): string {
+        return this.alias !== undefined ? this.alias : this.type;
+    }
+}
+
+/**
+ * The authenticate clause node describes the authenticate for routes and routers.
+ */
+export class AuthenticateClauseNode extends SyntaxNode {
+
+    /**
+     * The alias or type of the auth block to use. If this is undefined, the default auth block is used.
+     */
+    public readonly authBlock?: string;
+
+    /**
+     * The roles that are required to access the route.
+     */
+    public readonly authorization?: string[];
+
+
+    constructor(authBlock?: string, authorization?: string[]) {
+        super();
+        this.authBlock = authBlock;
+        this.authorization = authorization;
     }
 }
 
@@ -265,4 +350,11 @@ export enum Method {
     Patch = "PATCH",
     Options = "OPTIONS",
     Head = "HEAD",
+}
+
+/**
+ * The type of authentication that is used.
+ */
+export enum AuthType {
+    APIKey = "API-Key",
 }

@@ -1,9 +1,15 @@
-target JavaScript;
+target JavaScript_ExpressJS;
 
 use env;
 
 use cors(
 	origin: @env.ALLOWED_ORIGIN
+);
+
+auth API-Key as apiKey (
+    source: header,
+    field: "X-API-Key",
+    defaultAccess: public
 );
 
 router /api 
@@ -14,6 +20,7 @@ router /api
 {
     GET /hello?name=string
         as HelloRoute
+        authenticate apiKey with "admin"
 
     POST /person
         as CreatePerson

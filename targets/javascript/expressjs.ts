@@ -9,7 +9,7 @@ export default class JavaScriptTargetPlugin extends PluginBase {
     private _exports: string[] = ["startServer", "errorMessage", "YmirRestBase"];
 
     public get targetFor(): string | undefined {
-        return "JavaScript";
+        return "JavaScript_ExpressJS";
     }
 
     public compile(context: IPluginContext): void {

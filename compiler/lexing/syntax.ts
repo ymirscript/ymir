@@ -80,6 +80,12 @@ export enum SyntaxKind {
     TimeTypeKeyword,
     BodyKeyword,
     HeaderKeyword,
+    QueryKeyword,
+    WithKeyword,
+    PublicKeyword,
+    AuthenticatedKeyword,
+    AuthenticateKeyword,
+    AuthKeyword,
     
     // Punctuation
     OpenBraceToken,
