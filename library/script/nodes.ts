@@ -245,6 +245,11 @@ export class AuthBlockNode extends SyntaxNode {
      */
     public readonly isDefaultAccessPublic?: boolean;
 
+    /**
+     * Whether the authorization is in use or not.
+     */
+    public isAuthorizationInUse: boolean;
+
     constructor(type: AuthType, source: "header"|"body"|"query", field: string, alias?: string, isDefaultAccessPublic?: "public"|"authenticated") {
         super();
         this.type = type;
@@ -252,10 +257,16 @@ export class AuthBlockNode extends SyntaxNode {
         this.field = field;
         this.alias = alias;
         this.isDefaultAccessPublic = isDefaultAccessPublic === "authenticated" ? false : true;
+        this.isAuthorizationInUse = false;
     }
 
     public get id(): string {
         return this.alias !== undefined ? this.alias : this.type;
+    }
+
+    public get name(): string {
+        const id = this.id.replaceAll(/[^a-zA-Z0-9_]/g, "");
+        return id[0].toUpperCase() + id.substring(1);
     }
 }
 
@@ -267,7 +278,7 @@ export class AuthenticateClauseNode extends SyntaxNode {
     /**
      * The alias or type of the auth block to use. If this is undefined, the default auth block is used.
      */
-    public readonly authBlock?: string;
+    public readonly authBlock: string;
 
     /**
      * The roles that are required to access the route.
@@ -275,7 +286,7 @@ export class AuthenticateClauseNode extends SyntaxNode {
     public readonly authorization?: string[];
 
 
-    constructor(authBlock?: string, authorization?: string[]) {
+    constructor(authBlock: string, authorization?: string[]) {
         super();
         this.authBlock = authBlock;
         this.authorization = authorization;

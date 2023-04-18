@@ -20,6 +20,7 @@ export class Parser {
     private readonly _policy: ParsingPolicy;
     private readonly _context: ParserContext;
     private _workingDirectory: string = Deno.cwd();
+    private _currentProjectNode: ProjectNode|undefined;
 
     constructor(diagnosticSink: DiagnosticSink, policy: ParsingPolicy, tokens: ISyntaxToken[]) {
         this.diagnostics = diagnosticSink;
@@ -56,9 +57,11 @@ export class Parser {
         const target = this.parseTarget();
 
         const projectNode = new ProjectNode(target, {});
+        this._currentProjectNode = projectNode;
 
         this.parseParentNode(projectNode);
-        
+        this._currentProjectNode = undefined;
+
         return projectNode;
     }
 
@@ -379,28 +382,46 @@ export class Parser {
         return new RouteNode(method, path, header, body, authenticate);
     }
 
-    private parseAuthenticateClause(): AuthenticateClauseNode {
-        let authBlock: string|undefined;
+    private parseAuthenticateClause(): AuthenticateClauseNode|undefined {
+        let authBlock: string = "";
         let authorization: string[]|undefined;
 
         if (this._context.currentToken.kind === SyntaxKind.Identifier) {
             authBlock = this._context.matchToken(SyntaxKind.Identifier, false, "<string>").text;
+        } else if (Object.values(this._currentProjectNode!.authBlocks).length > 1) {
+            this.diagnostics.reportUnexpectedToken(this._context.currentToken, [SyntaxKind.Identifier], "<authblock>", this._context.workingFile);
+            return undefined;
+        }
+
+        if (authBlock === "") {
+            authBlock = Object.keys(this._currentProjectNode!.authBlocks)[0];
+            if (!authBlock) {
+                this.diagnostics.reportError(new SourcePosition(this._context.workingFile, new SourceSpan(this._context.currentToken.line ?? - 1, 1), this._context.currentToken.column), `No default auth block found.`);
+                return undefined;
+            }
+        }
+
+        const authBlockNode = this._currentProjectNode!.authBlocks[authBlock];
+        if (!authBlockNode) {
+            this.diagnostics.reportError(new SourcePosition(this._context.workingFile, new SourceSpan(this._context.currentToken.line ?? - 1, 1), this._context.currentToken.column), `No auth block found for '${authBlock}'.`);
+            return undefined;
         }
 
         if (this._context.currentToken.kind === SyntaxKind.WithKeyword) {
             this._context.jump();
+            authBlockNode.isAuthorizationInUse = true;
             authorization = [];
 
             // @ts-ignore: The cursor was moved.
             if (this._context.currentToken.kind === SyntaxKind.StringLiteral) {
-                authorization.push((<IStringToken>this._context.matchToken(SyntaxKind.StringLiteral, false, "<string>")).value);
+                authorization.push((<IStringToken>this._context.matchToken(SyntaxKind.StringLiteral, false, "<string>")).text);
                 
             // @ts-ignore: The cursor was moved.
             } else if (this._context.currentToken.kind === SyntaxKind.OpenBracketToken) {
                 this._context.jump();
 
                 while (this._context.currentToken.kind !== SyntaxKind.CloseBracketToken && this._context.currentToken.kind !== SyntaxKind.EndOfFileToken) {
-                    authorization.push((<IStringToken>this._context.matchToken(SyntaxKind.StringLiteral, false, "<string>")).value);
+                    authorization.push((<IStringToken>this._context.matchToken(SyntaxKind.StringLiteral, false, "<string>")).text);
 
                     if (this._context.currentToken.kind === SyntaxKind.CommaToken) {
                         this._context.jump();
@@ -410,6 +431,7 @@ export class Parser {
                 this._context.jump();
             } else {
                 this.diagnostics.reportUnexpectedToken(this._context.currentToken, [SyntaxKind.StringLiteral, SyntaxKind.OpenBracketToken], undefined, this._context.workingFile);
+                return undefined;
             }
         }
 

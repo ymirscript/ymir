@@ -17,10 +17,10 @@ router /api
     header (
         X-API-Key: string
     )
+    authenticate apiKey with "admin"
 {
     GET /hello?name=string
         as HelloRoute
-        authenticate apiKey with "admin"
 
     POST /person
         as CreatePerson

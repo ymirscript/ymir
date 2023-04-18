@@ -57,9 +57,7 @@ async function run(args: string[]): Promise<void> {
 
     await context.initBuildDir();
 
-    console.log(JSON.stringify(context.projectNode, null, 4));
-
-    //targetPlugin.compile(context);
+    targetPlugin.compile(context);
 
     Logger.success("Compilation finished.");
 }
