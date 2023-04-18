@@ -5,7 +5,7 @@ import { AuthBlockNode, GlobalVariable, IPluginContext, Logger, MiddlewareNode, 
 export default class JavaScriptTargetPlugin extends PluginBase {
 
     private _middlewareHandlers: Map<string, (router: string, node: MiddlewareNode) => string[]> = new Map();
-    private _exports: string[] = ["startServer", "errorMessage", "YmirRestBase"];
+    private _exports: string[] = ["startServer", "messages", "YmirRestBase"];
     private _wasEnvUsed = false;
     private _wasAsyncUsed = false;
     private readonly _authHandlers: Record<string, string> = {};
@@ -49,7 +49,7 @@ export default class JavaScriptTargetPlugin extends PluginBase {
             "    return header === undefined ? undefined : headers[header];",
             "};",
             "",
-            "const errorMessage = {",
+            "const messages = {",
             "    _400: \"Bad Request: Field {field} of type {type} is required\",",
             "    _401: \"Unauthorized: You are not authorized to access this resource\",",
             "    _403: \"Forbidden: You are not allowed to access this resource\",",
@@ -72,7 +72,7 @@ export default class JavaScriptTargetPlugin extends PluginBase {
             "    const ymir = new runtime();",
             "    ymir.build(app);",
             "    app.listen(process.env.PORT || 3000, () => {",
-            "        console.log(errorMessage.Started.replace(\"{port}\", process.env.PORT || 3000));",
+            "        console.log(messages.Started.replace(\"{port}\", process.env.PORT || 3000));",
             "    });",
             "};",
             "",
@@ -169,7 +169,7 @@ export default class JavaScriptTargetPlugin extends PluginBase {
                     routerBuildFunctionLines.push(...[
                         `    const isAuthorized = await this.authorize${this._authHandlers[routerNode.authenticate.authBlock]}(authResult, [${routerNode.authenticate.authorization.join(", ")}]);`,
                         "    if (!isAuthorized) {",
-                        "        res.status(403).send(errorMessage._403);",
+                        "        res.status(403).send(messages._403);",
                         "        return;",
                         "    }",
                     ]);
@@ -218,9 +218,9 @@ export default class JavaScriptTargetPlugin extends PluginBase {
             output.push(...[
                 "        app.use((err, req, res, next) => {",
                 "            if (err) {",
-                "                res.status(500).send(errorMessage._500);",
+                "                res.status(500).send(messages._500);",
                 "            } else {",
-                "                res.status(404).send(errorMessage._404);",
+                "                res.status(404).send(messages._404);",
                 "            }",
                 "        });",
                 "    }",
@@ -257,13 +257,13 @@ export default class JavaScriptTargetPlugin extends PluginBase {
 
                 output.push(...[
                     "    if (apiKey === undefined) {",
-                    "        res.status(401).send(errorMessage._401);",
+                    "        res.status(401).send(messages._401);",
                     "        return undefined;",
                     "    }",
                     "",
                     "    const isValid = await this.authenticate" + authBlock.name + "(apiKey);",
                     "    if (!isValid) {",
-                    "        res.status(401).send(errorMessage._401);",
+                    "        res.status(401).send(messages._401);",
                     "        return undefined;",
                     "    }",
                     "",
@@ -311,7 +311,7 @@ export default class JavaScriptTargetPlugin extends PluginBase {
                 output.push(...[
                     `    const isAuthorized = await this.authorize${this._authHandlers[route.authenticate.authBlock]}(authResult, [${route.authenticate.authorization.join(", ")}]);`,
                     "    if (!isAuthorized) {",
-                    "        res.status(403).send(errorMessage._403);",
+                    "        res.status(403).send(messages._403);",
                     "        return;",
                     "    }",
                 ]);
@@ -333,7 +333,7 @@ export default class JavaScriptTargetPlugin extends PluginBase {
 
         if (header !== undefined) {
             output.push(`    if (req.headers === undefined) {`);
-            output.push(`        res.status(400).send(errorMessage._400.replace("{field}", "header").replace("{type}", "object"));`);
+            output.push(`        res.status(400).send(messages._400.replace("{field}", "header").replace("{type}", "object"));`);
             output.push(`        return false;`);
             output.push(`    }`);
             output.push("");
@@ -342,12 +342,12 @@ export default class JavaScriptTargetPlugin extends PluginBase {
             for (const key in header) {
                 if (!(header[key] instanceof Object)) {
                     output.push(`    if (getHeader(header, "${key}") === undefined) {`);
-                    output.push(`        res.status(400).send(errorMessage._400.replace("{field}", "header.${key}").replace("{type}", "${header[key]}"));`);
+                    output.push(`        res.status(400).send(messages._400.replace("{field}", "header.${key}").replace("{type}", "${header[key]}"));`);
                     output.push(`        return false;`);
                     output.push(`    }`);
                     // @ts-ignore - we can assume, that the schema value is of string type, cause for schema validation only objects and strings are allowed
                     output.push(`    if (!is${header[key].charAt(0).toUpperCase() + header[key].slice(1)}(getHeader(header, "${key}"))) {`);
-                    output.push(`        res.status(400).send(errorMessage._400.replace("{field}", "header.${key}").replace("{type}", "${header[key]}"));`);
+                    output.push(`        res.status(400).send(messages._400.replace("{field}", "header.${key}").replace("{type}", "${header[key]}"));`);
                     output.push(`        return false;`);
                     output.push(`    }`);
                     output.push("");
@@ -357,7 +357,7 @@ export default class JavaScriptTargetPlugin extends PluginBase {
         
         if (path.queryParameters.length > 0) {
             output.push(`    if (req.query === undefined) {`);
-            output.push(`        res.status(400).send(errorMessage._400.replace("{field}", "query").replace("{type}", "object"));`);
+            output.push(`        res.status(400).send(messages._400.replace("{field}", "query").replace("{type}", "object"));`);
             output.push(`        return false;`);
             output.push(`    }`);
             output.push("");
@@ -365,11 +365,11 @@ export default class JavaScriptTargetPlugin extends PluginBase {
 
             for (const queryParameter of path.queryParameters) {
                 output.push(`    if (query.${queryParameter.name} === undefined) {`);
-                output.push(`        res.status(400).send(errorMessage._400.replace("{field}", "query.${queryParameter.name}").replace("{type}", "${queryParameter.type}"));`);
+                output.push(`        res.status(400).send(messages._400.replace("{field}", "query.${queryParameter.name}").replace("{type}", "${queryParameter.type}"));`);
                 output.push(`        return false;`);
                 output.push(`    }`);
                 output.push(`    if (!is${queryParameter.type.charAt(0).toUpperCase() + queryParameter.type.slice(1)}(query.${queryParameter.name})) {`);
-                output.push(`        res.status(400).send(errorMessage._400.replace("{field}", "query.${queryParameter.name}").replace("{type}", "${queryParameter.type}"));`);
+                output.push(`        res.status(400).send(messages._400.replace("{field}", "query.${queryParameter.name}").replace("{type}", "${queryParameter.type}"));`);
                 output.push(`        return false;`);
                 output.push(`    }`);
                 output.push("");
@@ -378,7 +378,7 @@ export default class JavaScriptTargetPlugin extends PluginBase {
 
         if (body !== undefined) {
             output.push(`    if (req.body === undefined) {`);
-            output.push(`        res.status(400).send(errorMessage._400.replace("{field}", "body").replace("{type}", "object"));`);
+            output.push(`        res.status(400).send(messages._400.replace("{field}", "body").replace("{type}", "object"));`);
             output.push(`        return false;`);
             output.push(`    }`);
             output.push("");
@@ -397,19 +397,19 @@ export default class JavaScriptTargetPlugin extends PluginBase {
         for (const key in schema) {
             if (schema[key] instanceof Object) {
                 output.push(`    if (${objName}["${key}"] === undefined) {`);
-                output.push(`        res.status(400).send(errorMessage._400.replace("{field}", "${objName}.${key}").replace("{type}", "object"));`);
+                output.push(`        res.status(400).send(messages._400.replace("{field}", "${objName}.${key}").replace("{type}", "object"));`);
                 output.push(`        return false;`);
                 output.push(`    }`);
                 output.push("");
                 output.push(...this.generateDeepObjectValidation(`${objName}.${key}`, schema[key] as MiddlewareOptions));
             } else {
                 output.push(`    if (${objName}["${key}"] === undefined) {`);
-                output.push(`        res.status(400).send(errorMessage._400.replace("{field}", "${objName}.${key}").replace("{type}", "${schema[key]}"));`);
+                output.push(`        res.status(400).send(messages._400.replace("{field}", "${objName}.${key}").replace("{type}", "${schema[key]}"));`);
                 output.push(`        return false;`);
                 output.push(`    }`);
                 // @ts-ignore - we can assume, that the schema value is of string type, cause for schema validation only objects and strings are allowed
                 output.push(`    if (!is${schema[key].charAt(0).toUpperCase() + schema[key].slice(1)}(${objName}["${key}"])) {`);
-                output.push(`        res.status(400).send(errorMessage._400.replace("{field}", "${objName}.${key}").replace("{type}", "${schema[key]}"));`);
+                output.push(`        res.status(400).send(messages._400.replace("{field}", "${objName}.${key}").replace("{type}", "${schema[key]}"));`);
                 output.push(`        return false;`);
                 output.push(`    }`);
                 output.push("");
