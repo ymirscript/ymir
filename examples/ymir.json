@@ -1,4 +1,12 @@
 {
     "debug": true,
-    "detailedErrors": true
+    "detailedErrors": true,
+    "target": {
+        "useSpringSecurity": true,
+        "packages": {
+            "main": "org.dasdarki.example",
+            "dto": "dto",
+            "config": ""
+        }
+    }
 }

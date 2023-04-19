@@ -3,10 +3,12 @@ import * as path from "https://deno.land/std@0.182.0/path/mod.ts";
 import { CompilationContext } from "./context.ts";
 import { Logger, PluginBase } from "../library/mod.ts";
 
-import * as nodejs from "../targets/javascript/expressjs.ts";
+import JavaScriptExpressJsTargetPlugin from "../targets/javascript/expressjs.ts";
+import JavaSpringBootTargetPlugin from "../targets/java/springboot.ts";
 
 const plugins = [
-    new nodejs.default(),
+    new JavaScriptExpressJsTargetPlugin(),
+    new JavaSpringBootTargetPlugin()
 ];
 
 function getTargetPlugin(name: string): PluginBase | undefined {

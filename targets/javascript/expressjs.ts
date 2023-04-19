@@ -2,7 +2,7 @@ import * as pathApi from "https://deno.land/std@0.182.0/path/mod.ts";
 
 import { AuthBlockNode, GlobalVariable, IPluginContext, Logger, MiddlewareNode, MiddlewareOptions, PathNode, PluginBase, RouteNode, RouterNode, AuthType, ProjectNode } from "../../library/mod.ts";
 
-export default class JavaScriptTargetPlugin extends PluginBase {
+export default class JavaScriptExpressJsTargetPlugin extends PluginBase {
 
     private _middlewareHandlers: Map<string, (router: string, node: MiddlewareNode) => string[]> = new Map();
     private _exports: string[] = ["startServer", "messages", "YmirRestBase"];
