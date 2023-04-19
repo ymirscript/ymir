@@ -14,6 +14,7 @@ export class CompilationContext implements IPluginContext {
     public readonly outputDirectory: string;
     public readonly diagnostics: DiagnosticSink|undefined;
     public readonly config: IYmirConfig;
+    public readonly configuration: { [key: string]: unknown; };
 
     private readonly _preparedIndexFile: PreparedYmirFile|undefined;
 
@@ -22,6 +23,7 @@ export class CompilationContext implements IPluginContext {
         this.config = loadConfig(this.workingDirectory);
 
         this.outputDirectory = path.join(this.workingDirectory, this.config.output!);
+        this.configuration = this.config.target ?? {};
 
         Logger.loglevel = this.config.debug ? LogLevel.Debug : LogLevel.Info;
 

@@ -27,4 +27,9 @@ export interface IPluginContext {
      * Whether the index file is prepared for the plugin.
      */
     readonly isIndexFilePrepared: boolean;
+
+    /**
+     * Contains workspace specific configuration for the target.
+     */
+    readonly configuration: {[key: string]: unknown};
 }

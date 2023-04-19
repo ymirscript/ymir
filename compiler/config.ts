@@ -42,6 +42,11 @@ export interface IYmirConfig {
      * Whether to display more detailed errors (experimental; improve later).
      */
     readonly detailedErrors?: boolean;
+
+    /**
+     * The target specific configuration.
+     */
+    readonly target?: {[key: string]: unknown};
 }
 
 function getDefaultConfig(): IYmirConfig {
