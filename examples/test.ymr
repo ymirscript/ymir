@@ -17,7 +17,7 @@ router /api
     header (
         X-API-Key: string
     )
-    authenticate apiKey with "admin"
+    authenticate
 {
     GET /hello?name=string
         as HelloRoute

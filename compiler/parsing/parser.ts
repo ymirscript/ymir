@@ -496,14 +496,18 @@ export class Parser {
 
             if (current.kind === SyntaxKind.HeaderKeyword) {
                 header = this.parseMiddlewareOptions();
+
+                if (this._context.currentToken === start) {
+                    this._context.jump();
+                }
             } else if (current.kind === SyntaxKind.BodyKeyword) {
                 body = this.parseMiddlewareOptions();
+
+                if (this._context.currentToken === start) {
+                    this._context.jump();
+                }
             } else if (current.kind === SyntaxKind.AuthenticateKeyword) {
                 authenticate = this.parseAuthenticateClause();
-            }
-
-            if (this._context.currentToken === start) {
-                this._context.jump();
             }
         }
 
