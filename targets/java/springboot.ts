@@ -228,23 +228,23 @@ export default class JavaSpringBootTargetPlugin extends PluginBase {
                 );
 
             configClass.save(this._configPackagePath);
-        } else {
-            const configClass = new ClassBuilder(this._configPackage, "CorsConfiguration")
-                .addImport("org.springframework.web.servlet.config.annotation.CorsRegistry")
-                .addImport("org.springframework.web.servlet.config.annotation.WebMvcConfigurer")
-                .addImport("org.springframework.context.annotation.Configuration")
-                .implements("WebMvcConfigurer")
-                .addAnnotation("Configuration")
-                .addAnnotation("EnableWebMvc")
-                .addMethod(new MethodBuilder("addCorsMappings")
-                    .addAnnotation("Override")
-                    .addParameter(new FieldBuilder("registry", "CorsRegistry"))
-                    .addBodyLine(`String allowedOrigin = ${origin};`)
-                    .addBodyLine(`registry.addMapping("/**").allowedOrigins(allowedOrigin).allowedMethods("*").allowedHeaders("*");`)
-                );
-
-            configClass.save(this._configPackagePath);
         }
+        
+        const configClass = new ClassBuilder(this._configPackage, "CorsConfigurationMVC")
+            .addImport("org.springframework.web.servlet.config.annotation.CorsRegistry")
+            .addImport("org.springframework.web.servlet.config.annotation.WebMvcConfigurer")
+            .addImport("org.springframework.context.annotation.Configuration")
+            .implements("WebMvcConfigurer")
+            .addAnnotation("Configuration")
+            .addAnnotation("EnableWebMvc")
+            .addMethod(new MethodBuilder("addCorsMappings")
+                .addAnnotation("Override")
+                .addParameter(new FieldBuilder("registry", "CorsRegistry"))
+                .addBodyLine(`String allowedOrigin = ${origin};`)
+                .addBodyLine(`registry.addMapping("/**").allowedOrigins(allowedOrigin).allowedMethods("*").allowedHeaders("*");`)
+            );
+
+        configClass.save(this._configPackagePath);
     }
 
     private compileAuthBlockNode(node: AuthBlockNode): void {
