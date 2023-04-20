@@ -21,12 +21,24 @@ router /api
 {
     GET /hello?name=string
         as HelloRoute
+        body (
+            age: int,
+            name: string,
+            address: {
+                zipCode: int,
+                street: string
+            }
+        )
 
     POST /person
         as CreatePerson
         body (
             name: string,
-            age: int
+            age: int,
+            address: {
+                zipCode: int,
+                street: string
+            }
         )
         authenticate apiKey with "admin"
 

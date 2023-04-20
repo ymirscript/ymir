@@ -168,7 +168,7 @@ export default class JavaSpringBootTargetPlugin extends PluginBase {
 
             for (const key in options) {
                 if (typeof options[key] === "object") {
-                    const innerClassBuilder = compile(options[key] as MiddlewareOptions, this.makePascalCase(key) + "Dto", classPackage);
+                    const innerClassBuilder = compile(options[key] as MiddlewareOptions, this.makePascalCase(key) + "Dto");
                     const className = innerClassBuilder.name;
                     classBuilder.addClass(innerClassBuilder);
 
