@@ -87,23 +87,25 @@ export default class JavaScriptExpressJsTargetPlugin extends PluginBase {
         const routerName = isApp ? 'app' : routerNode.path.name;
         const output: string[] = [];
 
-        for (const middleware of routerNode.middlewares) {
-            const handler = this._middlewareHandlers.get(middleware.name);
-            if (handler === undefined) {
-                Logger.warning("No handler for middleware \"%s\" found.", middleware.name);
-                continue;
-            }
-
-            const handlerCode = handler(routerName, middleware);
-            if (handlerCode.length <= 0) {
-                Logger.debug("WARNING: Handler for middleware \"%s\" returned undefined.", middleware.name);
-                continue;
-            }
-
-            output.push(...handlerCode);
-        }
-
         if (isApp) {
+            if (routerNode instanceof ProjectNode) {
+                for (const middleware of routerNode.middlewares) {
+                    const handler = this._middlewareHandlers.get(middleware.name);
+                    if (handler === undefined) {
+                        Logger.warning("No handler for middleware \"%s\" found.", middleware.name);
+                        continue;
+                    }
+        
+                    const handlerCode = handler(routerName, middleware);
+                    if (handlerCode.length <= 0) {
+                        Logger.debug("WARNING: Handler for middleware \"%s\" returned undefined.", middleware.name);
+                        continue;
+                    }
+        
+                    output.push(...handlerCode);
+                }
+            }
+
             output.push(...["", `class YmirRestBase {`]);
 
             if (routerNode instanceof ProjectNode) {
@@ -116,7 +118,7 @@ export default class JavaScriptExpressJsTargetPlugin extends PluginBase {
 
         const routerBuildFunctionLines: string[] = [];
 
-        if (routerNode.middlewares.length > 0 && !isApp) {
+        /*if (routerNode.middlewares.length > 0 && !isApp) {
             routerBuildFunctionLines.push("// Middlewares");
 
             for (const middleware of routerNode.middlewares) {
@@ -134,7 +136,7 @@ export default class JavaScriptExpressJsTargetPlugin extends PluginBase {
 
                 routerBuildFunctionLines.push(...handlerCode);
             }
-        }
+        }*/
 
         if (!isApp) {
             routerBuildFunctionLines.push(`const ${routerName} = express.Router();`);

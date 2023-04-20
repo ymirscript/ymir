@@ -95,7 +95,11 @@ export class Parser {
 
         switch (current.kind) {
             case SyntaxKind.UseKeyword:
-                routerNode.middlewares.push(this.parseMiddleware());
+                if (routerNode instanceof ProjectNode) {
+                    routerNode.middlewares.push(this.parseMiddleware());
+                } else {
+                    this.diagnostics.reportError(new SourcePosition(this._context.workingFile, new SourceSpan(current.line ?? - 1, 1), current.column), "use can only be used in the project node.");
+                }
                 break;
 
             case SyntaxKind.GetMethodKeyword:
@@ -664,11 +668,10 @@ export class Parser {
         parser.setWorkingDirectory(workingDir);
 
         const beforeRoutes = parent.routes.length;
-        const beforeMiddlewares = parent.middlewares.length;
         const beforeRouters = parent.routers.length;
         parser.parseParentNode(parent);
 
-        Logger.success("Include-Parsing complete! Added %d routes, %d middlewares and %d routers.", parent.routes.length - beforeRoutes, parent.middlewares.length - beforeMiddlewares, parent.routers.length - beforeRouters);
+        Logger.success("Include-Parsing complete! Added %d routes and %d routers.", parent.routes.length - beforeRoutes, parent.routers.length - beforeRouters);
     }
 }
 

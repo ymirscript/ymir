@@ -75,7 +75,7 @@ export class PathNode extends SyntaxNode {
 
         const normPath = this.path.replace(/[^a-zA-Z0-9_]/g, "");
         if (normPath.length === 0) {
-            return "path" + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+            return "root";
         }
 
         if (normPath[0].match(/[0-9]/)) {
@@ -107,11 +107,6 @@ export class RouterNode extends SyntaxNode {
     public readonly routes: RouteNode[];
 
     /**
-     * The middlewares that are used in this router.
-     */
-    public readonly middlewares: MiddlewareNode[];
-
-    /**
      * Optional header validation schema defined through middleware options.
      * 
      * Every route in this router will inherit this header validation schema. If a route has its own header validation schema, it will be merged with this one.
@@ -135,7 +130,6 @@ export class RouterNode extends SyntaxNode {
         this.path = path;
         this.routers = [];
         this.routes = [];
-        this.middlewares = [];
         this.header = header;
         this.body = body;
         this.authenticate = authenticate;
@@ -168,8 +162,14 @@ export class ProjectNode extends ScriptFileNode {
      */
     public readonly authBlocks: { [key: AuthType|string]: AuthBlockNode; }
 
+    /**
+     * The middlewares that are used in this router.
+     */
+    public readonly middlewares: MiddlewareNode[];
+
     constructor(target: string, authBlocks: { [key: AuthType|string]: AuthBlockNode; }) {
         super();
+        this.middlewares = [];
         this.target = target;
         this.authBlocks = authBlocks;
     }
