@@ -99,7 +99,7 @@ export default class JavaSpringBootTargetPlugin extends PluginBase {
 
         const methodName = `${this.makePascalCase(prefixName)}${this.makePascalCase(node.path.name)}`;
         const method = new MethodBuilder(`${node.method.toLowerCase()}${methodName}`, "Object")
-            .addAnnotation(`RequestMapping("${prefixRoute}${node.path.path}", method = RequestMethod.${node.method.toUpperCase()})`);
+            .addAnnotation(`RequestMapping(path = "${prefixRoute}${node.path.path}", method = RequestMethod.${node.method.toUpperCase()})`);
         const interfaceMethod = new MethodBuilder(`handle${this.makePascalCase(prefixName)}${this.makePascalCase(node.path.name)}`, "Object");
 
         authenticates.forEach(authenticate => {
@@ -210,13 +210,21 @@ export default class JavaSpringBootTargetPlugin extends PluginBase {
                 .addImport("org.springframework.security.config.annotation.web.builders.HttpSecurity")
                 .addImport("org.springframework.security.config.annotation.web.configuration.EnableWebSecurity")
                 .addImport("org.springframework.context.annotation.Bean")
+                .addImport("org.springframework.security.web.SecurityFilterChain")
                 .addAnnotation("EnableWebSecurity")
-                .addMethod(new MethodBuilder("filterChain")
+                .addMethod(new MethodBuilder("filterChain", "SecurityFilterChain")
                     .throws("Exception")
                     .addAnnotation("Bean")
                     .addParameter(new FieldBuilder("http", "HttpSecurity"))
                     .addBodyLine(`String allowedOrigin = ${origin};`)
-                    .addBodyLine("http.cors().configurationSource(request -> new CorsConfiguration().applyPermitDefaultValues().setAllowedOrigins(Collections.singletonList(allowedOrigin)));")
+                    .addBodyLine("http.cors().configurationSource(request -> {")
+                    .addBodyLine("    org.springframework.web.cors.CorsConfiguration cors = new org.springframework.web.cors.CorsConfiguration();")
+                    .addBodyLine("    cors.setAllowedOrigins(java.util.Arrays.asList(allowedOrigin));")
+                    .addBodyLine("    cors.setAllowedMethods(java.util.Arrays.asList(\"*\"));")
+                    .addBodyLine("    cors.setAllowedHeaders(java.util.Arrays.asList(\"*\"));")
+                    .addBodyLine("    return cors;")
+                    .addBodyLine("});")
+                    .addBodyLine("return http.build();")
                 );
 
             configClass.save(this._configPackagePath);
