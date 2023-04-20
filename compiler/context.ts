@@ -10,6 +10,7 @@ import { LogLevel } from "../library/logger.ts";
 
 export class CompilationContext implements IPluginContext {
 
+    public readonly linesOfCode: number;
     public readonly workingDirectory: string;
     public readonly outputDirectory: string;
     public readonly diagnostics: DiagnosticSink|undefined;
@@ -47,6 +48,7 @@ export class CompilationContext implements IPluginContext {
 
         if (project === undefined) {
             this.diagnostics = parser.diagnostics;
+            this.linesOfCode = 0;
 
             Logger.error("Failed to parse %s", file.path);
             return;
@@ -55,16 +57,35 @@ export class CompilationContext implements IPluginContext {
         Logger.success("Parsed %s", file.path);
 
         this._preparedIndexFile = new PreparedYmirFile(file, project);
+        this.linesOfCode = parser.includedLinesOfCode + lexer.linesOfCode;
     }
 
     public async initBuildDir(): Promise<void> {
         if (await Deno.stat(this.outputDirectory).then(stat => stat.isDirectory).catch(() => false)) {
-            Logger.debug("Build directory already exists. Skipping creation.");
-            return;
+            Logger.debug("Build directory already exists. Deleting it...");
+            await Deno.remove(this.outputDirectory, { recursive: true });
         }
 
         await Deno.mkdir(this.outputDirectory);
         Logger.debug("Created build directory.");
+    }
+
+    public countGeneratedLinesOfCode(): Promise<number> {
+        const count = async (dir: string) => {
+            let lines = 0;
+
+            for await (const entry of Deno.readDir(dir)) {
+                if (entry.isFile) {
+                    lines += (await Deno.readTextFile(path.join(dir, entry.name))).split("\n").map((line) => line.trim()).filter((line) => line.length > 0).length;
+                } else if (entry.isDirectory) {
+                    lines += await count(path.join(dir, entry.name));
+                }
+            }
+
+            return lines;
+        };
+
+        return count(this.outputDirectory);
     }
 
     public get isIndexFilePrepared(): boolean {

@@ -37,6 +37,7 @@ async function run(args: string[]): Promise<void> {
         return;
     }
     
+    const start = Date.now();
     const context = new CompilationContext(indexFile);
 
     if (!context.isIndexFilePrepared) {
@@ -61,7 +62,31 @@ async function run(args: string[]): Promise<void> {
 
     targetPlugin.compile(context);
 
+    const end = Date.now();
+
     Logger.success("Compilation finished.");
+
+    const seconds = ((end - start) / 1000).toFixed(2);
+    const writtenLocs = context.linesOfCode;
+    const generatedLocs = await context.countGeneratedLinesOfCode();
+    const savedLocs = generatedLocs - writtenLocs;
+    const savedLocsPercent = ((savedLocs / writtenLocs) * 100).toFixed(2);
+    const avgDevWritingLocsPerDay = 10;
+    const savedDays = (savedLocs / avgDevWritingLocsPerDay).toFixed(2);
+
+    if (savedLocs > 0) {
+        console.log("");
+        console.log(`%cSaved %c${savedLocs}%c lines of code ( %c${savedLocsPercent}% %c) in %c${seconds} %cseconds. That's %c${savedDays} %cdays of development time saved! 😉`,
+            "color: white",
+            "color: cyan; font-weight: bold",
+            "color: white",
+            "color: purple; font-weight: bold",
+            "color: white",
+            "color: yellow; font-weight: bold",
+            "color: white",
+            "color: #00ff00; font-weight: bold",
+            "color: white");
+    }
 }
 
 await run(Deno.args);

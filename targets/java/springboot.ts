@@ -1,9 +1,11 @@
 import * as pathApi from "https://deno.land/std@0.182.0/path/mod.ts";
 
-import { AuthBlockNode, GlobalVariable, IPluginContext, Logger, MiddlewareNode, MiddlewareOptions, PathNode, PluginBase, RouteNode, RouterNode, AuthType, ProjectNode } from "../../library/mod.ts";
+import { AuthBlockNode, GlobalVariable, IPluginContext, Logger, MiddlewareNode, MiddlewareOptions, PathNode, PluginBase, RouteNode, RouterNode, AuthType, ProjectNode, AuthenticateClauseNode } from "../../library/mod.ts";
 
 export default class JavaSpringBootTargetPlugin extends PluginBase {
 
+    private readonly _middlewareHandlers: { [key: string]: (node: MiddlewareNode) => void } = {};
+    private readonly _authenticatorData: {[key: string]: { params: FieldBuilder[], field: FieldBuilder, authenticateCode: string[], authorizeCode: ((clause: AuthenticateClauseNode) => string[])|undefined }} = {};
     private _config: TargetConfig = null!;
     private _mainPackagePath: string = null!;
     private _mainPackage: string = null!;
@@ -13,6 +15,8 @@ export default class JavaSpringBootTargetPlugin extends PluginBase {
     private _configPackage: string = null!;
     private _controllerPackagePath: string = null!;
     private _controllerPackage: string = null!;
+    private _authPackagePath: string = null!;
+    private _authPackage: string = null!;
 
     public get targetFor(): string | undefined {
         return "Java_SpringBoot";
@@ -32,32 +36,199 @@ export default class JavaSpringBootTargetPlugin extends PluginBase {
         this._configPackage = this.joinPackages(this._mainPackage, this._config.packages.config);
         this._controllerPackagePath = this.initializePackagePath(this._mainPackagePath, this._config.packages.controller);
         this._controllerPackage = this.joinPackages(this._mainPackage, this._config.packages.controller);
+        this._authPackagePath = this.initializePackagePath(this._mainPackagePath, this._config.packages.auth);
+        this._authPackage = this.joinPackages(this._mainPackage, this._config.packages.auth);
+
+        this.registerMiddlewareHandler("cors", this.compileCorsMiddleware.bind(this));
 
         this.compileProjectNode(context.projectNode);
     }
 
     private compileProjectNode(node: ProjectNode): void {
+        node.middlewares.forEach(middleware => this.handleMiddleware(middleware));
 
-        this.compileRouterNode(node);
+        Object.values(node.authBlocks).forEach(authBlock => this.compileAuthBlockNode(authBlock));
+        
+        if (node.routes.length <= 0) {
+            node.routers.forEach(router => this.compileRouterNode(router));
+        } else {
+            this.compileRouterNode(node);
+        }
     }
 
-    private compileRouterNode(node: RouterNode): void {
-        const interfaceBuilder = new ClassBuilder(this._controllerPackage, this.makePascalCase(node.path.name === "root" ? "Main" : node.path.name) + "ControllerHandler", true);
+    private compileRouterNode(node: RouterNode, parentInterface?: ClassBuilder, parentClass?: ClassBuilder, prefixRoute?: string, prefixName?: string, preAuthenticates?: AuthenticateClauseNode[]): void {
+        const interfaceBuilder = parentInterface || new ClassBuilder(this._controllerPackage, this.makePascalCase(node.path.name === "" ? "Main" : node.path.name) + "ControllerHandler", true);
+        const authenticates = preAuthenticates || [];
 
-        const classBuilder = new ClassBuilder(this._controllerPackage, this.makePascalCase(node.path.name === "root" ? "Main" : node.path.name) + "Controller")
+        const classBuilder = parentClass || new ClassBuilder(this._controllerPackage, this.makePascalCase(node.path.name === "" ? "Main" : node.path.name) + "Controller")
             .addImport("org.springframework.beans.factory.annotation.Autowired")
             .addImport("org.springframework.web.bind.annotation.*")
             .addAnnotation("RestController")
             .addAnnotation(`RequestMapping("${node.path.path}")`)
             .addField(new FieldBuilder("handler", interfaceBuilder.name).addAnnotation("Autowired"));
-            
+
+        if (node.authenticate && !authenticates.find(a => a === node.authenticate)) {
+            authenticates.push(node.authenticate);
+        }
+        
+        node.routers.forEach(router => {
+            this.compileRouterNode(router, interfaceBuilder, classBuilder, (prefixRoute || "") + router.path.path, (prefixName || "") + this.makePascalCase(router.path.name), authenticates);
+        });
+
+        node.routes.forEach(route => {
+            this.compileRouteNode(route, interfaceBuilder, classBuilder, (prefixRoute || ""), (prefixName || ""), authenticates);
+        });
 
         interfaceBuilder.save(this._controllerPackagePath);
         classBuilder.save(this._controllerPackagePath);
     }
 
+    private compileRouteNode(node: RouteNode, interfaceBuilder: ClassBuilder, classBuilder: ClassBuilder, prefixRoute: string, prefixName: string, authenticates: AuthenticateClauseNode[]): void {
+        interfaceBuilder.addMethod(new MethodBuilder(`handle${this.makePascalCase(prefixName)}${this.makePascalCase(node.path.name)}`, "Object"));
+
+        const method = new MethodBuilder(`${node.method.toLowerCase()}${this.makePascalCase(prefixName)}${this.makePascalCase(node.path.name)}`, "Object")
+            .addAnnotation(`RequestMapping("${prefixRoute}${node.path.path}", method = RequestMethod.${node.method.toUpperCase()})`);
+
+        authenticates.forEach(authenticate => {
+            const authData = this._authenticatorData[authenticate.authBlock];
+            if (!authData) {
+                Logger.error(`Authenticator ${authenticate.authBlock} not found.`);
+                return;
+            }
+
+            classBuilder.addField(authData.field);
+
+            authData.params.forEach(param => method.addParameter(param));
+            authData.authenticateCode.forEach(code => method.addBodyLine(code));
+        
+            if (authenticate.authorization && authData.authorizeCode) {
+                authData.authorizeCode(authenticate).forEach(code => method.addBodyLine(code));
+            }
+        });
+    
+        method.addBodyLine(`return this.handler.handle${this.makePascalCase(prefixName)}${this.makePascalCase(node.path.name)}();`);
+
+        classBuilder.addMethod(method);
+    }
+
+    private compileCorsMiddleware(node: MiddlewareNode): void {
+        let origin = "*";
+
+        if (node.options["origin"] !== undefined) {
+            const originOption = node.options["origin"];
+            if (originOption instanceof GlobalVariable) {
+                if (originOption.path.length > 0 && originOption.path[0] === "env") {
+                    origin = `System.getenv("${originOption.name}")`;
+                }
+            } else {
+                origin = "\"" + originOption + "\"";
+            }
+        }
+
+        if (this._config.useSpringSecurity) {
+            const configClass = new ClassBuilder(this._configPackage, "CorsConfiguration")
+                .addImport("org.springframework.security.config.annotation.web.builders.HttpSecurity")
+                .addImport("org.springframework.security.config.annotation.web.configuration.EnableWebSecurity")
+                .addImport("org.springframework.context.annotation.Bean")
+                .addAnnotation("EnableWebSecurity")
+                .addMethod(new MethodBuilder("filterChain")
+                    .throws("Exception")
+                    .addAnnotation("Bean")
+                    .addParameter(new FieldBuilder("http", "HttpSecurity"))
+                    .addBodyLine(`String allowedOrigin = ${origin};`)
+                    .addBodyLine("http.cors().configurationSource(request -> new CorsConfiguration().applyPermitDefaultValues().setAllowedOrigins(Collections.singletonList(allowedOrigin)));")
+                );
+
+            configClass.save(this._configPackagePath);
+        } else {
+            const configClass = new ClassBuilder(this._configPackage, "CorsConfiguration")
+                .addImport("org.springframework.web.servlet.config.annotation.CorsRegistry")
+                .addImport("org.springframework.web.servlet.config.annotation.WebMvcConfigurer")
+                .addImport("org.springframework.context.annotation.Configuration")
+                .implements("WebMvcConfigurer")
+                .addAnnotation("Configuration")
+                .addAnnotation("EnableWebMvc")
+                .addMethod(new MethodBuilder("addCorsMappings")
+                    .addAnnotation("Override")
+                    .addParameter(new FieldBuilder("registry", "CorsRegistry"))
+                    .addBodyLine(`String allowedOrigin = ${origin};`)
+                    .addBodyLine(`registry.addMapping("/**").allowedOrigins(allowedOrigin).allowedMethods("*").allowedHeaders("*");`)
+                );
+
+            configClass.save(this._configPackagePath);
+        }
+    }
+
+    private compileAuthBlockNode(node: AuthBlockNode): void {
+        const authenticatorField = new FieldBuilder("authenticator", this.makePascalCase(node.name) + "Authenticator");
+        const authenticateMethod = new MethodBuilder("authenticate", "boolean");
+        const params: FieldBuilder[] = [];
+        const authenticateCode: string[] = [];
+        let authorizeCode: ((clause: AuthenticateClauseNode) => string[])|undefined = undefined;
+
+        if (node.type === AuthType.APIKey) {
+            authenticateMethod.addParameter(new FieldBuilder("apiKey", "String"));
+            if (node.source === "query") {
+                params.push(new FieldBuilder("apiKey", "String").addAnnotation(`RequestParam("${node.name}")`));
+            } else if (node.source === "header") {
+                params.push(new FieldBuilder("apiKey", "String").addAnnotation(`RequestHeader("${node.name}")`));
+            } else {
+                Logger.fatal("body as authentication source is not supported for APIKey authentication for JavaSpringBoot target!");
+                return;
+            }
+        }
+
+        const classBuilder = new ClassBuilder(this._authPackage, this.makePascalCase(node.name) + "Authenticator", true)
+            .addMethod(authenticateMethod);
+
+        if (node.isAuthorizationInUse) {
+            const authorizeMethod = new MethodBuilder("authorize", "boolean")
+                .addParameter(new FieldBuilder("apiKey", "String"))
+                .addParameter(new FieldBuilder("roles", "String[]"));
+
+            classBuilder.addMethod(authorizeMethod);
+
+            authorizeCode = (clause: AuthenticateClauseNode) => {
+                if (clause.authorization) {
+                    return [
+                        `if (!this.${authenticatorField.name}.authorize(apiKey, new String[] { ${clause.authorization.join(", ")} })) {`,
+                        `    throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.FORBIDDEN, "You are not authorized to access this resource!");`,
+                        `}`
+                    ];
+                }
+
+                return [];
+            };
+        }
+
+        classBuilder.save(this._authPackagePath);
+
+        authenticateCode.push(...[
+            `if (apiKey == null || !this.${authenticatorField.name}.authenticate(apiKey)) {`,
+            `    throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.UNAUTHORIZED, "You are not authorized to access this resource!");`,
+            `}`
+        ]);
+
+        this._authenticatorData[node.id] = {
+            params,
+            field: authenticatorField,
+            authenticateCode: authenticateCode,
+            authorizeCode: authorizeCode
+        };
+    }
+
     private makePascalCase(name: string): string {
+        if (name.length === 0) {
+            return name;
+        }
         return name[0].toUpperCase() + name.slice(1);
+    }
+
+    private makeCamelCase(name: string): string {
+        if (name.length === 0) {
+            return name;
+        }
+        return name[0].toLowerCase() + name.slice(1);
     }
 
     private initializePackagePath(base: string, packageName: string): string {
@@ -93,7 +264,8 @@ export default class JavaSpringBootTargetPlugin extends PluginBase {
                 main: "com.example",
                 dto: "dto",
                 config: "config",
-                controller: "controllers"
+                controller: "controllers",
+                auth: "auth",
             },
         };
 
@@ -115,9 +287,22 @@ export default class JavaSpringBootTargetPlugin extends PluginBase {
             if (packages.controller !== undefined && typeof packages.controller === "string") {
                 config.packages!.controller = packages.controller;
             }
+            if (packages.auth !== undefined && typeof packages.auth === "string") {
+                config.packages!.auth = packages.auth;
+            }
         }
 
         return config;
+    }
+
+    private registerMiddlewareHandler(name: string, handler: (node: MiddlewareNode) => void): void {
+        this._middlewareHandlers[name] = handler;
+    }
+
+    private handleMiddleware(node: MiddlewareNode): void {
+        if (this._middlewareHandlers[node.name] !== undefined) {
+            this._middlewareHandlers[node.name](node);
+        }
     }
 }
 
@@ -127,6 +312,7 @@ class ClassBuilder {
     private readonly _annotations: string[] = [];
     private readonly _methods: MethodBuilder[] = [];
     private readonly _fields: FieldBuilder[] = [];
+    private _implements: string[] = [];
 
     constructor(
         private readonly _package: string,
@@ -136,6 +322,11 @@ class ClassBuilder {
 
     public get name(): string {
         return this._name;
+    }
+
+    public implements(...interfaces: string[]): ClassBuilder {
+        this._implements.push(...interfaces);
+        return this;
     }
 
     public addImport(importPath: string): ClassBuilder {
@@ -154,6 +345,9 @@ class ClassBuilder {
     }
 
     public addField(field: FieldBuilder): ClassBuilder {
+        if (this._fields.find(f => f.name === field.name) !== undefined) {
+            return this;
+        }
         this._fields.push(field.setAsField());
         return this;
     }
@@ -183,7 +377,11 @@ class ClassBuilder {
             result += `@${annotation}\n`;
         });
 
-        result += `public ${(this._isInterface ? 'interface' : 'class')} ${this._name} {\n`;
+        result += `public ${(this._isInterface ? 'interface' : 'class')} ${this._name} `;
+        if (this._implements.length > 0) {
+            result += `implements ${this._implements.join(", ")} `;
+        }
+        result += "{\n";
 
         this._fields.forEach(field => {
             result += "\n";
@@ -192,7 +390,7 @@ class ClassBuilder {
 
         this._methods.forEach(method => {
             result += "\n";
-            result += "    " + method.toString(this._isInterface);
+            result += method.toString(this._isInterface);
         });
 
         result += "\n}\n";
@@ -206,6 +404,7 @@ class MethodBuilder {
     private readonly _parameters: FieldBuilder[] = [];
     private readonly _annotations: string[] = [];
     private readonly _body: string[] = [];
+    private readonly _exceptions: string[] = [];
 
     constructor(
         private _name: string,
@@ -225,6 +424,11 @@ class MethodBuilder {
 
     public addBodyLine(line: string): MethodBuilder {
         this._body.push(line);
+        return this;
+    }
+
+    public throws(...exceptions: string[]): MethodBuilder {
+        this._exceptions.push(...exceptions);
         return this;
     }
 
@@ -250,6 +454,10 @@ class MethodBuilder {
 
         result += ")";
 
+        if (this._exceptions.length > 0) {
+            result += ` throws ${this._exceptions.join(", ")}`;
+        }
+
         if (!omitBody) {
             result += " {\n";
             this._body.forEach(line => {
@@ -274,6 +482,10 @@ class FieldBuilder {
         private readonly _type: string,
         private _accessModifier: string = ""
     ) {}
+
+    public get name(): string {
+        return this._name;
+    }
 
     public setAsField(): FieldBuilder {
         this._accessModifier = "private ";
@@ -305,5 +517,6 @@ interface TargetConfig {
         dto: string;
         config: string;
         controller: string;
+        auth: string;
     };
 }

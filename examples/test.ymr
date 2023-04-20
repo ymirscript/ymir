@@ -17,7 +17,7 @@ router /api
     header (
         X-API-Key: string
     )
-    authenticate
+    authenticate apiKey with "admin"
 {
     GET /hello?name=string
         as HelloRoute
@@ -29,5 +29,13 @@ router /api
             age: int
         )
 
-    include "include.ymr"
+    router /v2
+    {
+        include "include.ymr"
+    }
+}
+
+router /another-router
+{
+    GET /test;
 }

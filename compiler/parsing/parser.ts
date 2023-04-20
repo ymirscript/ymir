@@ -21,6 +21,7 @@ export class Parser {
     private readonly _context: ParserContext;
     private _workingDirectory: string = Deno.cwd();
     private _currentProjectNode: ProjectNode|undefined;
+    private _includedLinesOfCode: number = 0;
 
     constructor(diagnosticSink: DiagnosticSink, policy: ParsingPolicy, tokens: ISyntaxToken[]) {
         this.diagnostics = diagnosticSink;
@@ -34,6 +35,10 @@ export class Parser {
 
     public setIndexFile(file: string): void {
         this._context.currentFiles.push(file);
+    }
+
+    public get includedLinesOfCode(): number {
+        return this._includedLinesOfCode;
     }
 
     /**
@@ -659,6 +664,8 @@ export class Parser {
             kind: YmirFileKind.Script
         }, decoder.decode(Deno.readFileSync(fullPath)));
 
+        this._includedLinesOfCode += lexer.linesOfCode;
+        
         const tokens = lexer.tokenize();
 
         Logger.info("Found %d tokens. Lets parse them...", tokens.length);

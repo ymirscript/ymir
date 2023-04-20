@@ -140,6 +140,7 @@ export default class JavaScriptExpressJsTargetPlugin extends PluginBase {
 
         if (!isApp) {
             routerBuildFunctionLines.push(`const ${routerName} = express.Router();`);
+            routerBuildFunctionLines.push(`outRouters["${routerName}"] = ${routerName};`);
 
             const validationCode = this.generateValidationCode(routerNode.header, routerNode.body, routerNode.path);
             if (validationCode.length > 0) {
@@ -210,6 +211,7 @@ export default class JavaScriptExpressJsTargetPlugin extends PluginBase {
             output.push(...[
                 "",
                 "    build(app) {",
+                "        const outRouters = {};"
             ]);
 
             for (const line of routerBuildFunctionLines) {
@@ -224,6 +226,7 @@ export default class JavaScriptExpressJsTargetPlugin extends PluginBase {
                 "                res.status(404).send(messages._404);",
                 "            }",
                 "        });",
+                "        return outRouters;",
                 "    }",
                 "}",
             ]);

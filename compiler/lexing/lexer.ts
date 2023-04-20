@@ -7,12 +7,15 @@ import { ISyntaxToken } from "./tokens.ts";
 
 export class Lexer {
 
+    public readonly linesOfCode: number;
+
     private readonly _context: LexerContext;
     private _line: number;
 
     constructor(file: IYmirFile|undefined, text: string) {
         this._context = new LexerContext(file, text);
         this._line = 1;
+        this.linesOfCode = text.split("\n").map((line) => line.trim()).filter((line) => line.length > 0).length;
     }
 
     public tokenize(): ISyntaxToken[] {

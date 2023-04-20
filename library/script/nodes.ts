@@ -75,7 +75,7 @@ export class PathNode extends SyntaxNode {
 
         const normPath = this.path.replace(/[^a-zA-Z0-9_]/g, "");
         if (normPath.length === 0) {
-            return "root";
+            return "";
         }
 
         if (normPath[0].match(/[0-9]/)) {
