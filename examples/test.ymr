@@ -28,6 +28,7 @@ router /api
             name: string,
             age: int
         )
+        authenticate apiKey with "admin"
 
     router /v2
     {
