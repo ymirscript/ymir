@@ -118,26 +118,6 @@ export default class JavaScriptExpressJsTargetPlugin extends PluginBase {
 
         const routerBuildFunctionLines: string[] = [];
 
-        /*if (routerNode.middlewares.length > 0 && !isApp) {
-            routerBuildFunctionLines.push("// Middlewares");
-
-            for (const middleware of routerNode.middlewares) {
-                const handler = this._middlewareHandlers.get(middleware.name);
-                if (handler === undefined) {
-                    Logger.warning("No handler for middleware \"%s\" found.", middleware.name);
-                    continue;
-                }
-
-                const handlerCode = handler(isApp ? "app" : "router", middleware);
-                if (handlerCode.length <= 0) {
-                    Logger.debug("WARNING: Handler for middleware \"%s\" returned undefined.", middleware.name);
-                    continue;
-                }
-
-                routerBuildFunctionLines.push(...handlerCode);
-            }
-        }*/
-
         if (!isApp) {
             routerBuildFunctionLines.push(`const ${routerName} = express.Router();`);
             routerBuildFunctionLines.push(`outRouters["${routerName}"] = ${routerName};`);
@@ -278,6 +258,50 @@ export default class JavaScriptExpressJsTargetPlugin extends PluginBase {
                     output.push(...[
                         "",
                         `async authorize${authBlock.name}(apiKey, roles) {`,
+                        "    return true;",
+                        "}"
+                    ]);
+                }
+                break;
+            case AuthType.Bearer:
+                this._authHandlers[authBlock.id] = authBlock.name; 
+
+                output.push(...[
+                    "",
+                    `async authenticate${authBlock.name}(jwt) {`,
+                    "    return true;",
+                    "}",
+                    "",
+                    `async #handle${authBlock.name}Authentication(req, res) {`,
+                ]);
+
+                if (authBlock.source === "header") {
+                    output.push(`    const jwt = getHeader(req.headers, \"Authorization\")?.replace(\"Bearer \", \"\");`);
+                } else {
+                    Logger.error("Bearer authentication only supports header source.");
+                    return [];
+                }
+
+                output.push(...[
+                    "    if (jwt === undefined) {",
+                    "        res.status(401).send(messages._401);",
+                    "        return undefined;",
+                    "    }",
+                    "",
+                    "    const isValid = await this.authenticate" + authBlock.name + "(jwt);",
+                    "    if (!isValid) {",
+                    "        res.status(401).send(messages._401);",
+                    "        return undefined;",
+                    "    }",
+                    "",
+                    "    return jwt;",
+                    "}",
+                ]);
+
+                if (authBlock.isAuthorizationInUse) {
+                    output.push(...[
+                        "",
+                        `async authorize${authBlock.name}(jwt, roles) {`,
                         "    return true;",
                         "}"
                     ]);
