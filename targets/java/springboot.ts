@@ -96,6 +96,7 @@ export default class JavaSpringBootTargetPlugin extends PluginBase {
     private compileRouteNode(node: RouteNode, interfaceBuilder: ClassBuilder, classBuilder: ClassBuilder, prefixRoute: string, prefixName: string, authenticates: AuthenticateClauseNode[], headerValidations: MiddlewareOptions, bodyValidations: MiddlewareOptions): void {
         headerValidations = {...headerValidations, ...(node.header || {})};
         bodyValidations = {...bodyValidations, ...(node.body || {})};
+        authenticates = [...authenticates, ...(node.authenticate ? [node.authenticate] : [])];
 
         const methodName = `${this.makePascalCase(prefixName)}${this.makePascalCase(node.path.name)}`;
         const method = new MethodBuilder(`${node.method.toLowerCase()}${methodName}`, "Object")
@@ -308,7 +309,7 @@ export default class JavaSpringBootTargetPlugin extends PluginBase {
 
         authenticateCode.push(...[
             ...pre,
-            `if (apiKey == null || !this.${authenticatorField.name}.authenticate(${vars.join(", ")})) {`,
+            `if (${(vars.map(x => `${x} == null`).join(" || "))} || !this.${authenticatorField.name}.authenticate(${vars.join(", ")})) {`,
             `    throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.UNAUTHORIZED, "You are not authorized to access this resource!");`,
             `}`
         ]);

@@ -8,7 +8,7 @@ use cors(
 
 auth Bearer as apiKey (
     source: header,
-    defaultAccess: public
+    defaultAccess: authenticated
 );
 
 router /api 
@@ -35,7 +35,6 @@ router /api
                 street: string
             }
         )
-        authenticate apiKey with "admin"
 
     router /v2
     {
