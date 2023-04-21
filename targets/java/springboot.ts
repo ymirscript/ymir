@@ -1,7 +1,7 @@
 import * as pathApi from "https://deno.land/std@0.182.0/path/mod.ts";
 import { encode as base64Encode } from "https://deno.land/std@0.182.0/encoding/base64.ts";
 
-import { AuthBlockNode, GlobalVariable, IPluginContext, Logger, MiddlewareNode, MiddlewareOptions, PluginBase, RouteNode, RouterNode, AuthType, ProjectNode, AuthenticateClauseNode, QueryParameterType } from "../../library/mod.ts";
+import { AuthBlockNode, GlobalVariable, IPluginContext, Logger, MiddlewareNode, MiddlewareOptions, PluginBase, RouteNode, RouterNode, AuthType, ProjectNode, AuthenticateClauseNode, QueryParameterType, AbortError } from "../../library/mod.ts";
 
 export default class JavaSpringBootTargetPlugin extends PluginBase {
 
@@ -19,6 +19,7 @@ export default class JavaSpringBootTargetPlugin extends PluginBase {
     private _controllerPackage: string = null!;
     private _authPackagePath: string = null!;
     private _authPackage: string = null!;
+    private _defaultAuthenticate: AuthenticateClauseNode | undefined = undefined;
 
     public get targetFor(): string | undefined {
         return "Java_SpringBoot";
@@ -63,6 +64,10 @@ export default class JavaSpringBootTargetPlugin extends PluginBase {
         const authenticates = preAuthenticates || [];
         const headerValidations = {...(preHeaderValidations || {}), ...(node.header || {})};
         const bodyValidations = {...(preBodyValidations || {}), ...(node.body || {})};
+
+        if (authenticates.length <= 0 && this._defaultAuthenticate) {
+            authenticates.push(this._defaultAuthenticate);
+        }
 
         const classBuilder = parentClass || new ClassBuilder(this._controllerPackage, this.makePascalCase(node.path.name === "" ? "Main" : node.path.name) + "Controller")
             .addImport("org.springframework.beans.factory.annotation.Autowired")
@@ -261,6 +266,15 @@ export default class JavaSpringBootTargetPlugin extends PluginBase {
         let authorizeCode: ((clause: AuthenticateClauseNode) => string[])|undefined = undefined;
         let vars: string[] = [];
         let pre: string[] = [];
+
+        if (node.isDefaultAccessPublic === false) {
+            if (this._defaultAuthenticate) {
+                Logger.fatal("Only one default authentication block can be defined.");
+                throw new AbortError();
+            }
+
+            this._defaultAuthenticate = new AuthenticateClauseNode(node.id);
+        }
 
         if (node.type === AuthType.APIKey) {
             authenticateMethod.addParameter(new FieldBuilder("apiKey", "String"));
