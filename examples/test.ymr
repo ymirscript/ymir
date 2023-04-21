@@ -1,4 +1,4 @@
-target Java_SpringBoot;
+target JavaScript_ExpressJS;
 
 use env;
 

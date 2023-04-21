@@ -1,12 +1,13 @@
 import * as pathApi from "https://deno.land/std@0.182.0/path/mod.ts";
 
-import { AuthBlockNode, GlobalVariable, IPluginContext, Logger, MiddlewareNode, MiddlewareOptions, PathNode, PluginBase, RouteNode, RouterNode, AuthType, ProjectNode } from "../../library/mod.ts";
+import { AuthBlockNode, GlobalVariable, IPluginContext, Logger, MiddlewareNode, MiddlewareOptions, PathNode, PluginBase, RouteNode, RouterNode, AuthType, ProjectNode, AbortError } from "../../library/mod.ts";
 
 export default class JavaScriptExpressJsTargetPlugin extends PluginBase {
 
     private _middlewareHandlers: Map<string, (router: string, node: MiddlewareNode) => string[]> = new Map();
     private _exports: string[] = ["startServer", "messages", "YmirRestBase"];
     private _wasEnvUsed = false;
+    private _defaultAuthenticate: string|undefined = undefined;
     private readonly _authHandlers: Record<string, string> = {};
 
     public get targetFor(): string | undefined {
@@ -217,6 +218,15 @@ export default class JavaScriptExpressJsTargetPlugin extends PluginBase {
     private handleAuthBlock(authBlock: AuthBlockNode): string[] {
         const output: string[] = [];
 
+        if (authBlock.isDefaultAccessPublic === false) {
+            if (this._defaultAuthenticate) {
+                Logger.fatal("Only one default authentication block can be defined.");
+                throw new AbortError();
+            }
+
+            this._defaultAuthenticate = authBlock.id;
+        }
+
         switch (authBlock.type) {
             case AuthType.APIKey:
                 this._authHandlers[authBlock.id] = authBlock.name; 
@@ -279,7 +289,7 @@ export default class JavaScriptExpressJsTargetPlugin extends PluginBase {
                     output.push(`    const jwt = getHeader(req.headers, \"Authorization\")?.replace(\"Bearer \", \"\");`);
                 } else {
                     Logger.error("Bearer authentication only supports header source.");
-                    return [];
+                    throw new AbortError();
                 }
 
                 output.push(...[
@@ -321,7 +331,7 @@ export default class JavaScriptExpressJsTargetPlugin extends PluginBase {
 
         buildFunctionLines.push(`${(routerName === "" ? "app" : routerName)}.${route.method.toLowerCase()}("${route.path.path}", this.${handlerName}.bind(this));`);
 
-        const methodPrefix = route.authenticate ? "async " : "";
+        const methodPrefix = route.authenticate || this._defaultAuthenticate ? "async " : "";
 
         output.push("");
         output.push(`${methodPrefix}${handlerName}(req, res) {`);
@@ -343,6 +353,13 @@ export default class JavaScriptExpressJsTargetPlugin extends PluginBase {
                     "    }",
                 ]);
             }
+        } else if (this._defaultAuthenticate) {
+            output.push(...[
+                `    const authResult = await this.#handle${this._authHandlers[this._defaultAuthenticate]}Authentication(req, res);`,
+                "    if (authResult === undefined) {",
+                "        return;",
+                "    }",
+            ]);
         }
 
         output.push(...this.generateValidationCode(route.header, route.body, route.path));

@@ -8,3 +8,4 @@ export { PluginBase } from "./plugins/base.ts";
 export type { IPluginContext } from "./plugins/context.ts";
 
 export { Logger } from "./logger.ts";
+export { AbortError } from "./errors.ts";

@@ -1,7 +1,7 @@
 import * as path from "https://deno.land/std@0.182.0/path/mod.ts";
 
 import { CompilationContext } from "./context.ts";
-import { Logger, PluginBase } from "../library/mod.ts";
+import { AbortError, Logger, PluginBase } from "../library/mod.ts";
 
 import JavaScriptExpressJsTargetPlugin from "../targets/javascript/expressjs.ts";
 import JavaSpringBootTargetPlugin from "../targets/java/springboot.ts";
@@ -60,7 +60,16 @@ async function run(args: string[]): Promise<void> {
 
     await context.initBuildDir();
 
-    targetPlugin.compile(context);
+    try {
+        targetPlugin.compile(context);
+    } catch (e) {
+        if (e instanceof AbortError) {
+            Logger.fatal("Aborting.");
+            return;
+        } else {
+            throw e;
+        }
+    }
 
     const end = Date.now();
 
