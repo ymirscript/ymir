@@ -1,1 +1,1 @@
-deno compile --allow-read --allow-write --output .\build\ymir .\compiler\cli.ts
+deno compile --allow-read --allow-write --allow-run --output .\build\ymir .\compiler\cli.ts
