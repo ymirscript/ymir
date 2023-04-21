@@ -368,4 +368,5 @@ export enum Method {
  */
 export enum AuthType {
     APIKey = "API-Key",
+    Bearer = "Bearer",
 }

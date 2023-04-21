@@ -2,7 +2,8 @@
     "debug": true,
     "detailedErrors": true,
     "target": {
-        "useSpringSecurity": true,
+        "useSpringSecurity": false,
+        "appendRequest": true,
         "packages": {
             "main": "org.dasdarki.example",
             "dto": "dto",

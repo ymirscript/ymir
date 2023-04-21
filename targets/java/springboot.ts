@@ -121,6 +121,11 @@ export default class JavaSpringBootTargetPlugin extends PluginBase {
 
         const callParams: string[] = [];
 
+        if (this._config.appendRequest) {
+            method.addParameter(new FieldBuilder("request", "jakarta.servlet.http.HttpServletRequest"));
+            callParams.push("request");
+        }
+
         for (const key in headerValidations) {
             if (typeof headerValidations[key] === "string") {
                 const name = "header" + this.makePascalCase(this.enusreJavaAllowedName(key));
@@ -253,6 +258,8 @@ export default class JavaSpringBootTargetPlugin extends PluginBase {
         const params: FieldBuilder[] = [];
         const authenticateCode: string[] = [];
         let authorizeCode: ((clause: AuthenticateClauseNode) => string[])|undefined = undefined;
+        let vars: string[] = [];
+        let pre: string[] = [];
 
         if (node.type === AuthType.APIKey) {
             authenticateMethod.addParameter(new FieldBuilder("apiKey", "String"));
@@ -264,6 +271,14 @@ export default class JavaSpringBootTargetPlugin extends PluginBase {
                 Logger.fatal("body as authentication source is not supported for APIKey authentication for JavaSpringBoot target!");
                 return;
             }
+
+            vars = ["apiKey"];
+        } else if (node.type === AuthType.Bearer) {
+            authenticateMethod.addParameter(new FieldBuilder("jwt", "String"));
+            params.push(new FieldBuilder("jwt", "String").addAnnotation(`RequestHeader("Authorization")`));
+            
+            vars = ["jwt"];
+            pre = ["jwt = jwt.substring(7);"];
         }
 
         const classBuilder = new ClassBuilder(this._authPackage, this.makePascalCase(node.name) + "Authenticator", true)
@@ -271,7 +286,7 @@ export default class JavaSpringBootTargetPlugin extends PluginBase {
 
         if (node.isAuthorizationInUse) {
             const authorizeMethod = new MethodBuilder("authorize", "boolean")
-                .addParameter(new FieldBuilder("apiKey", "String"))
+                .addParameters(...vars.map(x => new FieldBuilder(x, "String")))
                 .addParameter(new FieldBuilder("roles", "String[]"));
 
             classBuilder.addMethod(authorizeMethod);
@@ -279,7 +294,7 @@ export default class JavaSpringBootTargetPlugin extends PluginBase {
             authorizeCode = (clause: AuthenticateClauseNode) => {
                 if (clause.authorization) {
                     return [
-                        `if (!this.${authenticatorField.name}.authorize(apiKey, new String[] { ${clause.authorization.join(", ")} })) {`,
+                        `if (!this.${authenticatorField.name}.authorize(${vars.join(", ")}, new String[] { ${clause.authorization.join(", ")} })) {`,
                         `    throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.FORBIDDEN, "You are not authorized to access this resource!");`,
                         `}`
                     ];
@@ -292,7 +307,8 @@ export default class JavaSpringBootTargetPlugin extends PluginBase {
         classBuilder.save(this._authPackagePath);
 
         authenticateCode.push(...[
-            `if (apiKey == null || !this.${authenticatorField.name}.authenticate(apiKey)) {`,
+            ...pre,
+            `if (apiKey == null || !this.${authenticatorField.name}.authenticate(${vars.join(", ")})) {`,
             `    throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.UNAUTHORIZED, "You are not authorized to access this resource!");`,
             `}`
         ]);
@@ -387,6 +403,7 @@ export default class JavaSpringBootTargetPlugin extends PluginBase {
     private getConfig(baseConfig: {[key: string]: unknown}): TargetConfig {
         const config: TargetConfig = {
             useSpringSecurity: false,
+            appendRequest: false,
             packages: {
                 main: "com.example",
                 dto: "dto",
@@ -398,6 +415,10 @@ export default class JavaSpringBootTargetPlugin extends PluginBase {
 
         if (baseConfig.useSpringSecurity !== undefined && typeof baseConfig.useSpringSecurity === "boolean") {
             config.useSpringSecurity = baseConfig.useSpringSecurity as boolean;
+        }
+
+        if (baseConfig.appendRequest !== undefined && typeof baseConfig.appendRequest === "boolean") {
+            config.appendRequest = baseConfig.appendRequest as boolean;
         }
 
         if (baseConfig.packages !== undefined && typeof baseConfig.packages === "object") {
@@ -586,6 +607,11 @@ class MethodBuilder {
         return this;
     }
 
+    public addParameters(...parameters: FieldBuilder[]): MethodBuilder {
+        this._parameters.push(...parameters);
+        return this;
+    }
+
     public addAnnotation(annotation: string): MethodBuilder {
         this._annotations.push(annotation);
         return this;
@@ -681,6 +707,7 @@ class FieldBuilder {
 
 interface TargetConfig {
     useSpringSecurity: boolean;
+    appendRequest: boolean;
     packages: {
         main: string;
         dto: string;

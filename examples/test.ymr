@@ -6,18 +6,13 @@ use cors(
 	origin: @env.ALLOWED_ORIGIN
 );
 
-auth API-Key as apiKey (
+auth Bearer as apiKey (
     source: header,
-    field: "X-API-Key",
     defaultAccess: public
 );
 
 router /api 
     as apiRouter
-    header (
-        X-API-Key: string
-    )
-    authenticate apiKey with "admin"
 {
     GET /hello?name=string
         as HelloRoute

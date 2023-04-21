@@ -174,7 +174,7 @@ export class Parser {
             if (this._context.currentToken.kind === SyntaxKind.OpenParenToken) {
                 body = this.parseMiddlewareOptions();
             } else {
-                this.diagnostics.reportError(new SourcePosition(this._context.workingFile, new SourceSpan(this._context.currentToken.line ?? - 1, 1), this._context.currentToken.column), "A auth block must have a body.", "(");
+                this.diagnostics.reportError(new SourcePosition(this._context.workingFile, new SourceSpan(this._context.currentToken.line ?? - 1, 1), this._context.currentToken.column), "An auth block must have a body.", "(");
                 return undefined;
             }
         }
@@ -182,12 +182,12 @@ export class Parser {
         this._context.matchToken(SyntaxKind.SemicolonToken, true);
 
         if (!body["source"] || (body["source"] !== "header" && body["source"] !== "query" && body["source"] !== "body")) {
-            this.diagnostics.reportError(new SourcePosition(this._context.workingFile, new SourceSpan(this._context.currentToken.line ?? - 1, 1), this._context.currentToken.column), "A auth block must have a source.", "source: header|query|body");
+            this.diagnostics.reportError(new SourcePosition(this._context.workingFile, new SourceSpan(this._context.currentToken.line ?? - 1, 1), this._context.currentToken.column), "An auth block must have a source.", "source: header|query|body");
             return undefined;
         }
 
-        if (!body["field"] || typeof body["field"] !== "string") {
-            this.diagnostics.reportError(new SourcePosition(this._context.workingFile, new SourceSpan(this._context.currentToken.line ?? - 1, 1), this._context.currentToken.column), "A auth block must have a field.", "field: <string>");
+        if (body["field"] && typeof body["field"] !== "string") {
+            this.diagnostics.reportError(new SourcePosition(this._context.workingFile, new SourceSpan(this._context.currentToken.line ?? - 1, 1), this._context.currentToken.column), "An auth block can only be a string.", "field: string");
             return undefined;
         }
 
@@ -196,12 +196,12 @@ export class Parser {
             if (body["defaultAccess"] === "public" || body["defaultAccess"] === "authenticated") {
                 defaultAccess = body["defaultAccess"];
             } else {
-                this.diagnostics.reportError(new SourcePosition(this._context.workingFile, new SourceSpan(this._context.currentToken.line ?? - 1, 1), this._context.currentToken.column), "A auth block must have a valid defaultAccess.", "defaultAccess: public|authenticated");
+                this.diagnostics.reportError(new SourcePosition(this._context.workingFile, new SourceSpan(this._context.currentToken.line ?? - 1, 1), this._context.currentToken.column), "An auth block must have a valid defaultAccess.", "defaultAccess: public|authenticated");
                 return undefined;
             }
         }
 
-        return new AuthBlockNode(type, body["source"], body["field"], alias, defaultAccess);
+        return new AuthBlockNode(type, body["source"], body["field"] as string || "", alias, defaultAccess);
     }
 
     /**
