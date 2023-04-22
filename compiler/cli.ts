@@ -8,10 +8,12 @@ import { AbortError, Logger, PluginBase } from "../library/mod.ts";
 
 import JavaScriptExpressJsTargetPlugin from "../targets/javascript/expressjs.ts";
 import JavaSpringBootTargetPlugin from "../targets/java/springboot.ts";
+import SwaggerTargetPlugin from "../targets/swagger/index.ts";
 
 const plugins = [
     new JavaScriptExpressJsTargetPlugin(),
-    new JavaSpringBootTargetPlugin()
+    new JavaSpringBootTargetPlugin(),
+    new SwaggerTargetPlugin()
 ];
 
 /**
