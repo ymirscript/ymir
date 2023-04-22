@@ -14,6 +14,116 @@ const plugins = [
     new JavaSpringBootTargetPlugin()
 ];
 
+/**
+ * Runs the compiler as CLI.
+ * 
+ * @param args The arguments to pass to the compiler. 
+ */
+async function run(args: string[]): Promise<void> {
+    if (args.length <= 0) {
+        Logger.error("No input file or subcommand specified.");
+        return;
+    }
+
+    if (!await Deno.stat(args[0]).then(stat => stat.isFile).catch(() => false)) {
+        if (args[0] === "install") {
+            if (args.length <= 1) {
+                Logger.error("No target URL specified.");
+                return;
+            }
+
+            await installExternalTarget(args[1]);
+        } else if (args[0] === "remove") {
+            if (args.length <= 1) {
+                Logger.error("No target name specified.");
+                return;
+            }
+
+            await uninstallExternalTarget(args[1]);
+        } else if (args[0] === "list") {
+            await listExternalTargets();
+        } else if (args[0] === "help") {
+            Logger.info("Usage: ymir <[file]|help|install|remove|list> (<options>)");
+            console.log("");
+            console.log("\t%c[file]%c: %cThe Ymir file to compile.", "color: cyan", "color: white", "color: yellow");
+            console.log("\t%chelp%c: %cShows this help message.", "color: cyan", "color: white", "color: yellow");
+            console.log("\t%cinstall <external URL>%c: %cInstalls the target from the specified URL.", "color: cyan", "color: white", "color: yellow");
+            console.log("\t%cremove <target name>%c: %cRemoves the specified target.", "color: cyan", "color: white", "color: yellow");
+            console.log("\t%clist%c: %cLists all installed targets.", "color: cyan", "color: white", "color: yellow");
+        } else {
+            Logger.error("The input file must be a Ymir file of kind script.");
+        }
+        return;
+    }
+
+    const indexFile = args[0];
+    if (path.extname(indexFile) !== ".ymr") {
+        Logger.error("The input file must be a Ymir file of kind script.");
+        return;
+    }
+    
+    const start = Date.now();
+    const context = new CompilationContext(indexFile);
+
+    if (!context.isIndexFilePrepared) {
+        if (context.diagnostics) {
+            context.diagnostics.print(context);
+        }
+
+        Logger.fatal("Aborting.");
+        return;
+    }
+
+    Logger.info("Compiling %s", args[0]);
+
+    const targetPlugin = getTargetPlugin(context.projectNode.target);
+    await context.initBuildDir();
+
+    if (targetPlugin) {
+        try {
+            targetPlugin.compile(context);
+        } catch (e) {
+            if (e instanceof AbortError) {
+                Logger.fatal("Aborting.");
+                return;
+            } else {
+                throw e;
+            }
+        }
+    } else {
+        if (!(await runExternalCompiler(context))) {
+            Logger.fatal("Aborting.");
+            return;
+        }
+    }
+
+    const end = Date.now();
+
+    Logger.success("Compilation finished.");
+
+    const seconds = ((end - start) / 1000).toFixed(2);
+    const writtenLocs = context.linesOfCode;
+    const generatedLocs = await context.countGeneratedLinesOfCode();
+    const savedLocs = generatedLocs - writtenLocs;
+    const savedLocsPercent = ((savedLocs / writtenLocs) * 100).toFixed(2);
+    const avgDevWritingLocsPerDay = 10;
+    const savedDays = (savedLocs / avgDevWritingLocsPerDay).toFixed(2);
+
+    if (savedLocs > 0) {
+        console.log("");
+        console.log(`%cSaved %c${savedLocs}%c lines of code ( %c${savedLocsPercent}% %c) in %c${seconds} %cseconds. That's %c${savedDays} %cdays of development time saved! 😉`,
+            "color: white",
+            "color: cyan; font-weight: bold",
+            "color: white",
+            "color: purple; font-weight: bold",
+            "color: white",
+            "color: yellow; font-weight: bold",
+            "color: white",
+            "color: #00ff00; font-weight: bold",
+            "color: white");
+    }
+}
+
 function getTargetPlugin(name: string): PluginBase | undefined {
     return plugins.find(plugin => plugin.targetFor === name);
 }
@@ -122,116 +232,6 @@ async function listExternalTargets() {
     const config = JSON.parse(await Deno.readTextFile(targetsConfig));
     for (const key in config) {
         console.log(`%c${key}%c: %c${config[key]}`, "color: cyan", "color: white", "color: yellow");
-    }
-}
-
-/**
- * Runs the compiler as CLI.
- * 
- * @param args The arguments to pass to the compiler. 
- */
-async function run(args: string[]): Promise<void> {
-    if (args.length <= 0) {
-        Logger.error("No input file or subcommand specified.");
-        return;
-    }
-
-    if (!await Deno.stat(args[0]).then(stat => stat.isFile).catch(() => false)) {
-        if (args[0] === "install") {
-            if (args.length <= 1) {
-                Logger.error("No target URL specified.");
-                return;
-            }
-
-            await installExternalTarget(args[1]);
-        } else if (args[0] === "remove") {
-            if (args.length <= 1) {
-                Logger.error("No target name specified.");
-                return;
-            }
-
-            await uninstallExternalTarget(args[1]);
-        } else if (args[0] === "list") {
-            await listExternalTargets();
-        } else if (args[0] === "help") {
-            Logger.info("Usage: ymir <[file]|help|install|remove|list> (<options>)");
-            console.log("");
-            console.log("\t%c[file]%c: %cThe Ymir file to compile.", "color: cyan", "color: white", "color: yellow");
-            console.log("\t%chelp%c: %cShows this help message.", "color: cyan", "color: white", "color: yellow");
-            console.log("\t%cinstall <external URL>%c: %cInstalls the target from the specified URL.", "color: cyan", "color: white", "color: yellow");
-            console.log("\t%cremove <target name>%c: %cRemoves the specified target.", "color: cyan", "color: white", "color: yellow");
-            console.log("\t%clist%c: %cLists all installed targets.", "color: cyan", "color: white", "color: yellow");
-        } else {
-            Logger.error("The input file must be a Ymir file of kind script.");
-        }
-        return;
-    }
-
-    const indexFile = args[0];
-    if (path.extname(indexFile) !== ".ymr") {
-        Logger.error("The input file must be a Ymir file of kind script.");
-        return;
-    }
-    
-    const start = Date.now();
-    const context = new CompilationContext(indexFile);
-
-    if (!context.isIndexFilePrepared) {
-        if (context.diagnostics) {
-            context.diagnostics.print(context);
-        }
-
-        Logger.fatal("Aborting.");
-        return;
-    }
-
-    Logger.info("Compiling %s", args[0]);
-
-    const targetPlugin = getTargetPlugin(context.projectNode.target);
-    await context.initBuildDir();
-
-    if (targetPlugin) {
-        try {
-            targetPlugin.compile(context);
-        } catch (e) {
-            if (e instanceof AbortError) {
-                Logger.fatal("Aborting.");
-                return;
-            } else {
-                throw e;
-            }
-        }
-    } else {
-        if (!(await runExternalCompiler(context))) {
-            Logger.fatal("Aborting.");
-            return;
-        }
-    }
-
-    const end = Date.now();
-
-    Logger.success("Compilation finished.");
-
-    const seconds = ((end - start) / 1000).toFixed(2);
-    const writtenLocs = context.linesOfCode;
-    const generatedLocs = await context.countGeneratedLinesOfCode();
-    const savedLocs = generatedLocs - writtenLocs;
-    const savedLocsPercent = ((savedLocs / writtenLocs) * 100).toFixed(2);
-    const avgDevWritingLocsPerDay = 10;
-    const savedDays = (savedLocs / avgDevWritingLocsPerDay).toFixed(2);
-
-    if (savedLocs > 0) {
-        console.log("");
-        console.log(`%cSaved %c${savedLocs}%c lines of code ( %c${savedLocsPercent}% %c) in %c${seconds} %cseconds. That's %c${savedDays} %cdays of development time saved! 😉`,
-            "color: white",
-            "color: cyan; font-weight: bold",
-            "color: white",
-            "color: purple; font-weight: bold",
-            "color: white",
-            "color: yellow; font-weight: bold",
-            "color: white",
-            "color: #00ff00; font-weight: bold",
-            "color: white");
     }
 }
 
