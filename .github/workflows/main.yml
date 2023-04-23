@@ -17,6 +17,12 @@ jobs:
         with:
           deno-version: v1.x
       - run: deno compile --allow-read --allow-write --allow-run --output ./build/ymir ./compiler/cli.ts
+      - if: ${{ matrix.os == 'macos-12'}}
+        run: |
+          mv ./build/ymir ./build/ymir-macos
+      - if: ${{ matrix.os == 'ubuntu-22.04'}}
+        run: |
+          mv ./build/ymir ./build/ymir-linux
       - name: Upload binaries to release
         uses: xresloader/upload-to-github-release@v1
         env:
