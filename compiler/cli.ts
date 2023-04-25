@@ -161,7 +161,7 @@ async function installExternalTarget(url: string) {
     }
 
     Logger.info("Downloading metadata...");
-    const metadata = await fetch(url + "/metadata.json").then(res => res.json());
+    const metadata = await fetch(url).then(res => res.json());
     if (!metadata.name || !metadata.download || !metadata.executable) {
         Logger.error("Invalid metadata.");
         return;
@@ -173,11 +173,13 @@ async function installExternalTarget(url: string) {
     await Deno.writeFile(tmp, new Uint8Array(zip));
 
     const targetHome = path.join(ymirDir, "homes", metadata.name);
-    if (await Deno.stat(targetHome).then(stat => stat.isDirectory).catch(() => false)) {
-        await Deno.mkdir(targetHome, {recursive: true});
+    if (await Deno.stat(targetHome).then(stat => stat.isDirectory).catch(() => false) === true) {
+        await Deno.remove(targetHome, {recursive: true});
     }
 
-    await decompress(tmp, targetHome, {overwrite: true});
+    await Deno.mkdir(targetHome, {recursive: true});
+
+    await decompress(tmp, targetHome);
 
     const executablePath = path.join(targetHome, metadata.executable);
 
@@ -191,6 +193,8 @@ async function installExternalTarget(url: string) {
     await Deno.writeTextFile(targetsConfig, JSON.stringify(config, null, 4));
 
     Logger.success("Target installed.");
+
+    await Deno.remove(tmp);
 }
 
 async function uninstallExternalTarget(name: string) {
@@ -244,9 +248,11 @@ async function runExternalCompiler(context: CompilationContext): Promise<boolean
         return false;
     }
 
+    Logger.info("Running external compiler '%s'...", context.projectNode.target)
+
     const data = {
         project: context.projectNode,
-        config: context.config,
+        config: context.config.target || {},
         output: context.outputDirectory
     };
 
@@ -265,6 +271,8 @@ async function runExternalCompiler(context: CompilationContext): Promise<boolean
         process.output(),
         process.stderrOutput()
     ]);
+
+    console.log(new TextDecoder().decode(stderr));
 
     process.close();
 

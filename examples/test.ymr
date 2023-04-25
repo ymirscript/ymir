@@ -1,4 +1,4 @@
-target Swagger;
+target DryRun;
 
 use json;
 

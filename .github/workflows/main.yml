@@ -16,7 +16,7 @@ jobs:
       - uses: denoland/setup-deno@v1.1.1
         with:
           deno-version: v1.x
-      - run: deno compile --allow-read --allow-write --allow-run --output ./build/ymir ./compiler/cli.ts
+      - run: deno compile --allow-read --allow-write --allow-run --allow-env --allow-net --output ./build/ymir ./compiler/cli.ts
       - if: ${{ matrix.os == 'macos-12'}}
         run: |
           mv ./build/ymir ./build/ymir-macos
