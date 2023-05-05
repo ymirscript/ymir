@@ -103,9 +103,15 @@ export default class JavaSpringBootTargetPlugin extends PluginBase {
         bodyValidations = {...bodyValidations, ...(node.body || {})};
         authenticates = [...authenticates, ...(node.authenticate ? [node.authenticate] : [])];
 
+        const convertPathString = (input: string): string => {
+            const regex = /:(\w+)/g;
+            return input.replace(regex, '{$1}');
+        };
+
+        const convertedPath = convertPathString(`${prefixRoute}${node.path.path}`);
         const methodName = `${this.makePascalCase(prefixName)}${this.makePascalCase(node.path.name)}`;
         const method = new MethodBuilder(`${node.method.toLowerCase()}${methodName}`, "Object")
-            .addAnnotation(`RequestMapping(path = "${prefixRoute}${node.path.path}", method = RequestMethod.${node.method.toUpperCase()})`);
+            .addAnnotation(`RequestMapping(path = "${convertedPath}", method = RequestMethod.${node.method.toUpperCase()})`);
         const interfaceMethod = new MethodBuilder(`handle${this.makePascalCase(prefixName)}${this.makePascalCase(node.path.name)}`, "Object");
 
         authenticates.forEach(authenticate => {
@@ -161,6 +167,26 @@ export default class JavaSpringBootTargetPlugin extends PluginBase {
 
             callParams.push(name);
         }
+
+        const extractPathVariables = (input: string): string[] => {
+            const regex = /{([\w-]+)(?:<[^>]*>)?}/g;
+            const matches = Array.from(input.matchAll(regex));
+            return matches.map(match => match[1]);
+        };
+
+        extractPathVariables(convertedPath).forEach(pathVarName => {
+            let varName = this.makeCamelCase(pathVarName);
+            if (varName === "class") {
+                varName = "clazz";
+            } else if (varName === "") {
+                varName = "pathVar" + Math.floor(Math.random() * 1000000);
+            }
+
+            method.addParameter(new FieldBuilder(varName, "String").addAnnotation(`PathVariable("${pathVarName}")`));
+            interfaceMethod.addParameter(new FieldBuilder(varName, "String"));
+
+            callParams.push(varName);
+        });
     
         method.addBodyLine(`return this.handler.handle${this.makePascalCase(prefixName)}${this.makePascalCase(node.path.name)}(${(callParams.join(", "))});`);
 

@@ -1,4 +1,4 @@
-target DryRun;
+target Java_SpringBoot;
 
 use json;
 
@@ -13,19 +13,11 @@ auth Bearer as apiKey (
     defaultAccess: authenticated
 );
 
-router /api 
+router /auth 
     as apiRouter
 {
-    GET /hello?name=string
+    GET /hello/:name
         as HelloRoute
-        body (
-            age: int,
-            name: string,
-            address: {
-                zipCode: int,
-                street: string
-            }
-        )
 
     POST /person
         as CreatePerson
