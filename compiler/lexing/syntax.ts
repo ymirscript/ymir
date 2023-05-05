@@ -53,6 +53,7 @@ export enum SyntaxKind {
     NumericLiteral,
     StringLiteral,
     BooleanLiteral,
+    PathLiteral,
 
     // Identifiers
     Identifier,

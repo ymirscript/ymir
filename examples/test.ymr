@@ -1,4 +1,4 @@
-target DryRun;
+target JavaScript_ExpressJS;
 
 use json;
 
@@ -13,7 +13,7 @@ auth Bearer as apiKey (
     defaultAccess: authenticated
 );
 
-router /api 
+router /auth 
     as apiRouter
 {
     GET /hello?name=string

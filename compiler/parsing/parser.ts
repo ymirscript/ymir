@@ -540,17 +540,10 @@ export class Parser {
     }
 
     private parsePath(): PathNode {
-        let path = "/";
         let alias: string|undefined;
         let queryParameters: QueryParameterNode[] = [];
 
-        this._context.matchToken(SyntaxKind.SlashToken, false, "/");
-
-        while (this._context.currentToken.kind === SyntaxKind.SlashToken || this._context.currentToken.kind === SyntaxKind.Identifier || this._context.currentToken.kind === SyntaxKind.HashToken || this._context.currentToken.kind === SyntaxKind.MinusToken) {
-            path += this._context.currentToken.text;
-
-            this._context.jump();
-        }
+        const path = this._context.matchToken(SyntaxKind.PathLiteral, false, "/...").text;
 
         if (this._context.currentToken.kind === SyntaxKind.QuestionToken) {
             queryParameters = this.parseQueryParameters();

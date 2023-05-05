@@ -328,10 +328,38 @@ export class StringSyntaxRule implements ISyntaxRule {
     }
 }
 
+/**
+ * The path syntax rule matches an URL path in the source code.
+ */
+export class RegExSyntaxRule implements ISyntaxRule {
+
+    constructor(
+        private readonly _pattern: RegExp,
+        private readonly _kind: SyntaxKind,
+        private readonly _normalizer?: (value: string) => string
+    ) {}
+
+    isMatch(context: LexerContext): boolean {
+        return context.peekRegEx(this._pattern).length > 0;
+    }
+
+    transform(context: LexerContext): ISyntaxToken {
+        const start = context.sourcePosition;
+        const text = context.readRegEx(this._pattern);
+
+        return {
+            kind: this._kind,
+            column: new SourceSpan(start, text.length),
+            text: this._normalizer !== undefined ? this._normalizer(text) : text
+        };
+    }
+}
+
 export const RuleSet: ISyntaxRule[] = [
     new NumberSyntaxRule(),
     new StringSyntaxRule(),
     new BooleanSyntaxRule(),
+    new RegExSyntaxRule(/^(?:\/(?::\w+|{[\w]+(?:<(?:[^>?\\]|\\.)+>)?}|(?:[^\s?;\\]|\\.)+))*/gm, SyntaxKind.PathLiteral, s => s.replaceAll('\\?', '?').replaceAll('\\;', ';').replaceAll('\\ ', ' ')),
 
     new PatternSyntaxRule("target", SyntaxKind.TargetKeyword),
     new PatternSyntaxRule("use", SyntaxKind.UseKeyword),

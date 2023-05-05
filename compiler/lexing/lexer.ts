@@ -154,6 +154,18 @@ export class LexerContext {
     }
 
     /**
+     * Peek at the next characters in the text and tries to match it with the given pattern.
+     * 
+     * @param pattern The pattern to match.
+     * @returns The matched text. If no match was found, an empty string is returned.
+     */
+    public peekRegEx(pattern: RegExp): string {
+        const text = this._text.substring(this._position);
+        const match = text.match(pattern);
+        return match !== null ? match[0] : "";
+    }
+
+    /**
      * Peek at the next character in the text.
      * 
      * @param offset The offset from the current position to peek at. 
@@ -234,6 +246,24 @@ export class LexerContext {
         const current = this.currentCharacter;
         this.nextToken(skipWhitespace);
         return current;
+    }
+
+    /**
+     * Reads the token matching the given pattern and adds the length to the position.
+     * 
+     * @param pattern The pattern to match.
+     * @returns The matched text. If no match was found, an empty string is returned.
+     */
+    public readRegEx(pattern: RegExp): string {
+        const text = this._text.substring(this._position);
+        const match = text.match(pattern);
+        if (match === null) {
+            return "";
+        }
+
+        this._position += match[0].length;
+        this._sourcePosition += match[0].length;
+        return match[0];
     }
 
     /**
