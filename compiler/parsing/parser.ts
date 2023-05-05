@@ -61,9 +61,9 @@ export class Parser {
     }
 
     private parseProject(): ProjectNode {
-        const target = this.parseTarget();
+        const targets = this.parseTargets();
 
-        const projectNode = new ProjectNode(target, {});
+        const projectNode = new ProjectNode(targets, {});
         this._currentProjectNode = projectNode;
 
         this.parseParentNode(projectNode);
@@ -87,14 +87,20 @@ export class Parser {
     /**
      * Parses: `target <target>;`
      */
-    private parseTarget(): string {
+    private parseTargets(): string[] {
         this._context.matchToken(SyntaxKind.TargetKeyword, false, "target");
 
-        const target = this._context.matchToken(SyntaxKind.Identifier).text;
+        const targets = [this._context.matchToken(SyntaxKind.Identifier).text];
+
+        while (this._context.currentToken.kind === SyntaxKind.CommaToken) {
+            this._context.jump();
+
+            targets.push(this._context.matchToken(SyntaxKind.Identifier).text);
+        }
 
         this._context.matchToken(SyntaxKind.SemicolonToken, true);
 
-        return target;
+        return targets.filter(val => val.trim().length > 0);
     }
 
     private parseRouterChildren(routerNode: RouterNode): void {
