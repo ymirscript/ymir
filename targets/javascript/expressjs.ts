@@ -334,6 +334,11 @@ export default class JavaScriptExpressJsTargetPlugin extends PluginBase {
         const methodPrefix = route.authenticate || this._defaultAuthenticate ? "async " : "";
 
         output.push("");
+
+        if (route.description) {
+            output.push(`/** ${route.description} */`);
+        }
+
         output.push(`${methodPrefix}${handlerName}(req, res) {`);
 
         if (route.authenticate && this._authHandlers[route.authenticate.authBlock]) {

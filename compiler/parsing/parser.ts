@@ -2,7 +2,7 @@
 import * as pathApi from "https://deno.land/std@0.182.0/path/mod.ts";
 
 import { GlobalVariable, Method, MiddlewareNode, MiddlewareOptionValue, ProjectNode, QueryParameterType, RouteNode, Logger, MiddlewareOptions, PathNode, QueryParameterNode, RouterNode, YmirFileKind, AuthBlockNode, AuthType, AuthenticateClauseNode } from "../../library/mod.ts";
-import { SourcePosition, SourceSpan, SyntaxKind } from "../lexing/syntax.ts";
+import { CommentDictionary, SourcePosition, SourceSpan, SyntaxKind } from "../lexing/syntax.ts";
 import { ISyntaxToken, IStringToken, INumericToken, IBooleanToken } from "../lexing/tokens.ts";
 import { DiagnosticSink } from "./diagnostics.ts";
 import { Lexer } from "../lexing/lexer.ts";
@@ -19,13 +19,15 @@ export class Parser {
 
     private readonly _policy: ParsingPolicy;
     private readonly _context: ParserContext;
+    private readonly _comments: CommentDictionary;
     private _workingDirectory: string = Deno.cwd();
     private _currentProjectNode: ProjectNode|undefined;
     private _includedLinesOfCode: number = 0;
 
-    constructor(diagnosticSink: DiagnosticSink, policy: ParsingPolicy, tokens: ISyntaxToken[]) {
+    constructor(diagnosticSink: DiagnosticSink, policy: ParsingPolicy, tokens: ISyntaxToken[], comments: CommentDictionary) {
         this.diagnostics = diagnosticSink;
         this._policy = policy;
+        this._comments = comments;
         this._context = new ParserContext(this.diagnostics, tokens);
     }
 
@@ -356,8 +358,8 @@ export class Parser {
     }
 
     private parseRoute(): RouteNode {
+        const comment = this._comments.getCommentForRoute(this._context.currentToken.line ?? -1);
         const method = this.parseMethod();
-
         const path = this.parsePath();
 
         let body: MiddlewareOptions|undefined;
@@ -388,7 +390,7 @@ export class Parser {
 
         this._context.matchToken(SyntaxKind.SemicolonToken, true);
 
-        return new RouteNode(method, path, header, body, authenticate);
+        return new RouteNode(method, path, header, body, authenticate, comment);
     }
 
     private parseAuthenticateClause(): AuthenticateClauseNode|undefined {
@@ -664,7 +666,7 @@ export class Parser {
         Logger.info("Found %d tokens. Lets parse them...", tokens.length);
         Logger.info("Parsing...");
 
-        const parser = new Parser(this.diagnostics, this._policy, tokens);
+        const parser = new Parser(this.diagnostics, this._policy, tokens, lexer.comments);
         parser.setWorkingDirectory(workingDir);
         parser._currentProjectNode = this._currentProjectNode;
 

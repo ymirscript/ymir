@@ -114,6 +114,10 @@ export default class JavaSpringBootTargetPlugin extends PluginBase {
             .addAnnotation(`RequestMapping(path = "${convertedPath}", method = RequestMethod.${node.method.toUpperCase()})`);
         const interfaceMethod = new MethodBuilder(`handle${this.makePascalCase(prefixName)}${this.makePascalCase(node.path.name)}`, "Object");
 
+        if (node.description) {
+            interfaceMethod.addComment(node.description);
+        }
+
         authenticates.forEach(authenticate => {
             const authData = this._authenticatorData[authenticate.authBlock];
             if (!authData) {
@@ -636,12 +640,18 @@ class MethodBuilder {
     private readonly _annotations: string[] = [];
     private readonly _body: string[] = [];
     private readonly _exceptions: string[] = [];
+    private readonly _commentLines: string[] = [];
 
     constructor(
         private _name: string,
         private _returnType: string = "void",
         private _accessModifier: string = "public"
     ) {}
+
+    public addComment(...lines: string[]): MethodBuilder {
+        this._commentLines.push(...lines);
+        return this;
+    }
 
     public addParameter(parameter: FieldBuilder): MethodBuilder {
         this._parameters.push(parameter);
@@ -671,6 +681,14 @@ class MethodBuilder {
     // deno-lint-ignore no-inferrable-types
     public toString(omitBody: boolean = false): string {
         let result = "";
+
+        if (this._commentLines.length > 0) {
+            result += "    /**\n";
+            this._commentLines.forEach(line => {
+                result += `     * ${line}\n`;
+            });
+            result += "     */\n";
+        }
 
         this._annotations.forEach(annotation => {
             result += `    @${annotation}\n`;
