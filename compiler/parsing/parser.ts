@@ -666,6 +666,7 @@ export class Parser {
 
         const parser = new Parser(this.diagnostics, this._policy, tokens);
         parser.setWorkingDirectory(workingDir);
+        parser._currentProjectNode = this._currentProjectNode;
 
         const beforeRoutes = parent.routes.length;
         const beforeRouters = parent.routers.length;
