@@ -1,3 +1,5 @@
+import { ISyntaxToken } from "./tokens.ts";
+
 /**
  * Defines the position of a token in the source code.
  */
@@ -39,6 +41,19 @@ export class SourceSpan {
     }
 }
 
+export class CommentDictionary {
+    
+    private readonly _comments: ISyntaxToken[] = [];
+
+    public addComment(comment: ISyntaxToken): void {
+        this._comments.push(comment);
+    }
+
+    public getCommentForRoute(routeStartLine: number): string|undefined {
+        return this._comments.find((comment) => comment.line === routeStartLine - 1)?.text;
+    }
+}
+
 /**
  * The syntax kind defines the type of a token in the lexing process.
  */
@@ -48,6 +63,7 @@ export enum SyntaxKind {
      */
     BadToken,
     EndOfFileToken,
+    Comment,
 
     // Literals
     NumericLiteral,

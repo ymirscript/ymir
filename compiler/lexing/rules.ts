@@ -359,6 +359,7 @@ export const RuleSet: ISyntaxRule[] = [
     new NumberSyntaxRule(),
     new StringSyntaxRule(),
     new BooleanSyntaxRule(),
+    new RegExSyntaxRule(/^\/\/.*$/g, SyntaxKind.Comment, s => s.substring(2).trim()),
     new RegExSyntaxRule(/^(?:\/(?::\w+|{[\w]+(?:<(?:[^>?\\]|\\.)+>)?}|(?:[^\s?;\\]|\\.)+))*/gm, SyntaxKind.PathLiteral, s => s.replaceAll('\\?', '?').replaceAll('\\;', ';').replaceAll('\\ ', ' ')),
 
     new PatternSyntaxRule("target", SyntaxKind.TargetKeyword),

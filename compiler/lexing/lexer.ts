@@ -2,12 +2,13 @@
 
 import { IYmirFile, Logger } from "../../library/mod.ts";
 import { RuleSet } from "./rules.ts";
-import { SourceSpan, SyntaxKind } from "./syntax.ts";
+import { CommentDictionary, SourceSpan, SyntaxKind } from "./syntax.ts";
 import { ISyntaxToken } from "./tokens.ts";
 
 export class Lexer {
 
     public readonly linesOfCode: number;
+    public readonly comments: CommentDictionary = new CommentDictionary();
 
     private readonly _context: LexerContext;
     private _line: number;
@@ -46,7 +47,12 @@ export class Lexer {
 
                 const result = rule.transform(this._context);
                 result.line = this._line;
-                tokens.push(result);
+                
+                if (result.kind === SyntaxKind.Comment) {
+                    this.comments.addComment(result);
+                } else {
+                    tokens.push(result);
+                }
 
                 found = true;
                 break;

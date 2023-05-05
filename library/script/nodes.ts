@@ -205,13 +205,19 @@ export class RouteNode extends SyntaxNode {
      */
     public readonly authenticate?: AuthenticateClauseNode;
 
-    constructor(method: Method, path: PathNode, header?: MiddlewareOptions, body?: MiddlewareOptions, authenticate?: AuthenticateClauseNode) {
+    /**
+     * The description of the route.
+     */
+    public readonly description?: string;
+
+    constructor(method: Method, path: PathNode, header?: MiddlewareOptions, body?: MiddlewareOptions, authenticate?: AuthenticateClauseNode, description?: string) {
         super();
         this.path = path;
         this.method = method;
         this.header = header;
         this.body = body;
         this.authenticate = authenticate;
+        this.description = description;
     }
 }
 
