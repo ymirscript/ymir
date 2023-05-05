@@ -12,18 +12,21 @@ export class CompilationContext implements IPluginContext {
 
     public readonly linesOfCode: number;
     public readonly workingDirectory: string;
-    public readonly outputDirectory: string;
     public readonly diagnostics: DiagnosticSink|undefined;
     public readonly config: IYmirConfig;
     public readonly configuration: { [key: string]: unknown; };
 
+    public additionalOutputDirectory: string;
+
     private readonly _preparedIndexFile: PreparedYmirFile|undefined;
+    private _outputDirectory: string;
 
     constructor(indexFile: string) {
         this.workingDirectory = path.dirname(indexFile);
         this.config = loadConfig(this.workingDirectory);
 
-        this.outputDirectory = path.join(this.workingDirectory, this.config.output!);
+        this._outputDirectory = path.join(this.workingDirectory, this.config.output!);
+        this.additionalOutputDirectory = "";
         this.configuration = this.config.target ?? {};
 
         Logger.loglevel = this.config.debug ? LogLevel.Debug : LogLevel.Info;
@@ -61,12 +64,12 @@ export class CompilationContext implements IPluginContext {
     }
 
     public async initBuildDir(): Promise<void> {
-        if (await Deno.stat(this.outputDirectory).then(stat => stat.isDirectory).catch(() => false)) {
+        if (await Deno.stat(this._outputDirectory).then(stat => stat.isDirectory).catch(() => false)) {
             Logger.debug("Build directory already exists. Deleting it...");
-            await Deno.remove(this.outputDirectory, { recursive: true });
+            await Deno.remove(this._outputDirectory, { recursive: true });
         }
 
-        await Deno.mkdir(this.outputDirectory);
+        await Deno.mkdir(this._outputDirectory);
         Logger.debug("Created build directory.");
     }
 
@@ -85,7 +88,17 @@ export class CompilationContext implements IPluginContext {
             return lines;
         };
 
-        return count(this.outputDirectory);
+        return count(this._outputDirectory);
+    }
+
+    public get outputDirectory(): string {
+        const dir = this.additionalOutputDirectory.length > 0 ? path.join(this._outputDirectory, this.additionalOutputDirectory) : this._outputDirectory;
+
+        if (!this.isDirectory(dir)) {
+            Deno.mkdirSync(dir, { recursive: true });
+        }
+
+        return dir;
     }
 
     public get isIndexFilePrepared(): boolean {
@@ -98,6 +111,14 @@ export class CompilationContext implements IPluginContext {
 
     public get projectNode(): ProjectNode {
         return this._preparedIndexFile!.project;
+    }
+
+    private isDirectory(path: string): boolean {
+        try {
+            return Deno.statSync(path).isDirectory;
+        } catch {
+            return false;
+        }
     }
 }
 

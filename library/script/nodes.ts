@@ -153,9 +153,9 @@ export class ScriptFileNode extends RouterNode {
 export class ProjectNode extends ScriptFileNode {
 
     /**
-     * The target language of the compiled project.
+     * The target languages of the compiled project.
      */
-    public readonly target: string;
+    public readonly targets: string[];
 
     /**
      * The authenticators that are used in the project.
@@ -167,10 +167,10 @@ export class ProjectNode extends ScriptFileNode {
      */
     public readonly middlewares: MiddlewareNode[];
 
-    constructor(target: string, authBlocks: { [key: AuthType|string]: AuthBlockNode; }) {
+    constructor(targets: string[], authBlocks: { [key: AuthType|string]: AuthBlockNode; }) {
         super();
         this.middlewares = [];
-        this.target = target;
+        this.targets = targets;
         this.authBlocks = authBlocks;
     }
 }

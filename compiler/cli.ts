@@ -78,24 +78,31 @@ async function run(args: string[]): Promise<void> {
 
     Logger.info("Compiling %s", args[0]);
 
-    const targetPlugin = getTargetPlugin(context.projectNode.target);
     await context.initBuildDir();
 
-    if (targetPlugin) {
-        try {
-            targetPlugin.compile(context);
-        } catch (e) {
-            if (e instanceof AbortError) {
+    for (const target of context.projectNode.targets) {
+        const targetPlugin = getTargetPlugin(target);
+
+        if (context.projectNode.targets.length > 1) {
+            context.additionalOutputDirectory = target;
+        }
+
+        if (targetPlugin) {
+            try {
+                targetPlugin.compile(context);
+            } catch (e) {
+                if (e instanceof AbortError) {
+                    Logger.fatal("Aborting.");
+                    return;
+                } else {
+                    throw e;
+                }
+            }
+        } else {
+            if (!(await runExternalCompiler(context, target))) {
                 Logger.fatal("Aborting.");
                 return;
-            } else {
-                throw e;
             }
-        }
-    } else {
-        if (!(await runExternalCompiler(context))) {
-            Logger.fatal("Aborting.");
-            return;
         }
     }
 
@@ -241,14 +248,14 @@ async function listExternalTargets() {
     }
 }
 
-async function runExternalCompiler(context: CompilationContext): Promise<boolean> {
-    const target = await getExternalTarget(context.projectNode.target);
+async function runExternalCompiler(context: CompilationContext, targetName: string): Promise<boolean> {
+    const target = await getExternalTarget(targetName);
     if (!target) {
-        Logger.error("The target '%s' is not supported.", context.projectNode.target);
+        Logger.error("The target '%s' is not supported.", targetName);
         return false;
     }
 
-    Logger.info("Running external compiler '%s'...", context.projectNode.target)
+    Logger.info("Running external compiler '%s'...", targetName)
 
     const data = {
         project: context.projectNode,
