@@ -1,4 +1,4 @@
-target JavaScript_ExpressJS;
+target Java_SpringBoot;
 
 use json;
 
@@ -16,16 +16,8 @@ auth Bearer as apiKey (
 router /auth 
     as apiRouter
 {
-    GET /hello?name=string
+    GET /hello/:name
         as HelloRoute
-        body (
-            age: int,
-            name: string,
-            address: {
-                zipCode: int,
-                street: string
-            }
-        )
 
     POST /person
         as CreatePerson
