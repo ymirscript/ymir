@@ -1,4 +1,4 @@
-target Java_SpringBoot;
+target Swagger;
 
 use json;
 
@@ -16,6 +16,7 @@ auth Bearer as apiKey (
 router /auth 
     as apiRouter
 {
+    // Prints the Hello message with the Name concatenated
     GET /hello/:name
         as HelloRoute
 

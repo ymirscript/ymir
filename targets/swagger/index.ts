@@ -88,6 +88,7 @@ export default class SwaggerTargetPlugin extends PluginBase {
             tags: preTags,
             produces: this._mimeType ? [this._mimeType] : undefined,
             consumes: this._mimeType ? [this._mimeType] : undefined,
+            summary: node.description,
             parameters: [],
             responses: {
                 "200": {
@@ -98,6 +99,15 @@ export default class SwaggerTargetPlugin extends PluginBase {
                 }
             }
         };
+
+        for (const key in routeObject) {
+            // @ts-ignore - this is fine
+            if (routeObject[key] === undefined) {
+                // @ts-ignore - this is fine
+                delete routeObject[key];
+            }
+        }
+
         router[method] = routeObject;
 
         for (const key in headerValidations) {
@@ -228,6 +238,7 @@ interface SwaggerRoute {
     tags?: string[];
     produces?: string[];
     consumes?: string[];
+    summary?: string;
     parameters: SwaggerParameter[];
     responses: {
         [key: string]: {

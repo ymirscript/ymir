@@ -355,11 +355,40 @@ export class RegExSyntaxRule implements ISyntaxRule {
     }
 }
 
+/**
+ * The comment syntax rule matches a single line comment in the source code.
+ */
+export class CommentSyntaxRule implements ISyntaxRule {
+
+    isMatch(context: LexerContext): boolean {
+        return context.currentCharacter === "/" && context.peek(1) === "/";
+    }
+
+    transform(context: LexerContext): ISyntaxToken {
+        const start = context.sourcePosition;
+
+        context.read();
+        context.read();
+
+        let comment = "";
+        
+        while (context.currentCharacter !== "\0" && context.currentCharacter !== "\n") {
+            comment += context.read();
+        }
+
+        return {
+            kind: SyntaxKind.Comment,
+            column: new SourceSpan(start, comment.length),
+            text: comment.trim()
+        };
+    }
+}
+
 export const RuleSet: ISyntaxRule[] = [
     new NumberSyntaxRule(),
     new StringSyntaxRule(),
     new BooleanSyntaxRule(),
-    new RegExSyntaxRule(/^\/\/.*$/g, SyntaxKind.Comment, s => s.substring(2).trim()),
+    new CommentSyntaxRule(),
     new RegExSyntaxRule(/^(?:\/(?::\w+|{[\w]+(?:<(?:[^>?\\]|\\.)+>)?}|(?:[^\s?;\\]|\\.)+))*/gm, SyntaxKind.PathLiteral, s => s.replaceAll('\\?', '?').replaceAll('\\;', ';').replaceAll('\\ ', ' ')),
 
     new PatternSyntaxRule("target", SyntaxKind.TargetKeyword),
