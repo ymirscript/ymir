@@ -1,7 +1,7 @@
 import * as pathApi from "https://deno.land/std@0.182.0/path/mod.ts";
 import { stringify } from "https://deno.land/std@0.182.0/encoding/yaml.ts";
 
-import { AbortError, AuthBlockNode, IPluginContext, Logger, MiddlewareNode, MiddlewareOptions, PluginBase, ProjectNode, RouteNode, RouterNode } from "../../library/mod.ts";
+import { AbortError, AuthBlockNode, BearerAuthGenerationMode, IPluginContext, Logger, MiddlewareNode, MiddlewareOptions, PluginBase, ProjectNode, RouteNode, RouterNode } from "../../library/mod.ts";
 
 export default class SwaggerTargetPlugin extends PluginBase {
 
@@ -9,6 +9,7 @@ export default class SwaggerTargetPlugin extends PluginBase {
     private _mimeType: string|undefined = undefined;
     private _defaultAuthenticate = false;
     private readonly _existingPaths: {[key: string]: SwaggerRouter } = {};
+    private readonly _additionalRoutes: {[key: string]: SwaggerRouter } = {};
 
     public get targetFor(): string | undefined {
         return "Swagger";
@@ -26,6 +27,10 @@ export default class SwaggerTargetPlugin extends PluginBase {
         };
 
         this.compileProjectNode(context.projectNode);
+
+        for (const key in this._additionalRoutes) {
+            this._swagger.paths[key] = this._additionalRoutes[key];
+        }
 
         const outputFile = pathApi.join(context.outputDirectory, "swagger.yml");
 
@@ -188,6 +193,71 @@ export default class SwaggerTargetPlugin extends PluginBase {
             }
 
             this._defaultAuthenticate = true;
+        }
+
+        const mode = node.options["mode"] as BearerAuthGenerationMode ?? BearerAuthGenerationMode.None;
+
+        if (mode === BearerAuthGenerationMode.Basic || mode === BearerAuthGenerationMode.Full) {
+            const withLogout = node.options["withLogout"] as boolean ?? false;
+            const loginPath = node.options["loginPath"] as string ?? "/login";
+            const loginSource = node.options["loginSource"] as "body"|"query"|"header" ?? "body";
+            const usernameField = node.options["usernameField"] as string ?? "username";
+            const passwordField = node.options["passwordField"] as string ?? "password";
+            const logoutPath = node.options["logoutPath"] as string ?? "/logout";
+
+            const loginRouter: SwaggerRouter = {
+                post: {
+                    tags: [node.name],
+                    produces: ["text/plain"],
+                    consumes: this._mimeType ? [this._mimeType] : undefined,
+                    summary: "Logins the user",
+                    parameters: [
+                        {
+                            in: loginSource,
+                            name: usernameField,
+                            required: true,
+                        },
+                        {
+                            in: loginSource,
+                            name: passwordField,
+                            required: true,
+                        }
+                    ],
+                    responses: {
+                        "200": {
+                            description: "Success!"
+                        },
+                        "400": {
+                            description: "Bad Request: A field from a specific type is required"
+                        },
+                        "401": {
+                            description: "Unauthorized: You are not authorized to access this resource"
+                        },
+                    },
+                },
+            };
+            this._additionalRoutes[loginPath] = loginRouter;
+
+            if (withLogout) {
+                const logoutRouter: SwaggerRouter = {
+                    post: {
+                        tags: [node.name],
+                        produces: ["text/plain"],
+                        consumes: this._mimeType ? [this._mimeType] : undefined,
+                        summary: "Logouts the user",
+                        parameters: [
+                            {
+                                in: "header",
+                                name: "Authorization",
+                                required: true,
+                                type: "string"
+                            }
+                        ],
+                        responses: {},
+                    },
+                };
+                this._additionalRoutes[logoutPath] = logoutRouter;
+            }
         }
     }
 

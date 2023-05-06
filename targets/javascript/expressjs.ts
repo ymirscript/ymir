@@ -291,7 +291,7 @@ export default class JavaScriptExpressJsTargetPlugin extends PluginBase {
 
                 const mode = authBlock.options["mode"] as BearerAuthGenerationMode ?? BearerAuthGenerationMode.None;
                 const postValidOutput: string[] = [];
-                let caller = "";
+                let caller = [];
     
                 if (mode === BearerAuthGenerationMode.None) {
                     caller = this.handleBearerAuthForModeNone(output, postValidOutput, authBlock);
@@ -322,7 +322,8 @@ export default class JavaScriptExpressJsTargetPlugin extends PluginBase {
                     "        return undefined;",
                     "    }",
                     "",
-                    `    const data = await this.${caller};`,
+                    ...caller.map((line) => "    " + line),
+                    "",
                     "    if (!data) {",
                     "        res.status(401).send(messages._401);",
                     "        return undefined;",
@@ -348,7 +349,7 @@ export default class JavaScriptExpressJsTargetPlugin extends PluginBase {
         return [output, buildOutput];
     }
 
-    private handleBearerAuthForModeNone(output: string[], postValidOutput: string[], authBlock: AuthBlockNode): string {
+    private handleBearerAuthForModeNone(output: string[], postValidOutput: string[], authBlock: AuthBlockNode): string[] {
         output.push(...[
             `async authenticate${authBlock.name}(jwt) {`,
             "    return true;",
@@ -357,10 +358,10 @@ export default class JavaScriptExpressJsTargetPlugin extends PluginBase {
 
         postValidOutput.push(`req.user = jwt;`);
 
-        return `authenticate${authBlock.name}(jwt)`;
+        return [`const data = await this.authenticate${authBlock.name}(jwt);`];
     }
 
-    private handleBearerAuthForModeBasic(output: string[], buildOutput: string[], postValidOutput: string[], authBlock: AuthBlockNode): string {
+    private handleBearerAuthForModeBasic(output: string[], buildOutput: string[], postValidOutput: string[], authBlock: AuthBlockNode): string[] {
         const withLogout = authBlock.options["withLogout"] as boolean ?? false;
         const loginPath = authBlock.options["loginPath"] as string ?? "/login";
         const loginSource = authBlock.options["loginSource"] as string ?? "body";
@@ -438,10 +439,10 @@ export default class JavaScriptExpressJsTargetPlugin extends PluginBase {
 
         postValidOutput.push(`req.user = data;`);
 
-        return `validateJwtFor${authBlock.name}(jwt)`;
+        return [`const data = await this.validateJwtFor${authBlock.name}(jwt);`];
     }
 
-    private handleBearerAuthForModeFull(output: string[], buildOutput: string[], postValidOutput: string[], authBlock: AuthBlockNode): string {
+    private handleBearerAuthForModeFull(output: string[], buildOutput: string[], postValidOutput: string[], authBlock: AuthBlockNode): string[] {
         const withLogout = authBlock.options["withLogout"] as boolean ?? false;
         const loginPath = authBlock.options["loginPath"] as string ?? "/login";
         const loginSource = authBlock.options["loginSource"] as string ?? "body";
@@ -449,7 +450,7 @@ export default class JavaScriptExpressJsTargetPlugin extends PluginBase {
         const passwordField = authBlock.options["passwordField"] as string ?? "password";
         const logoutPath = authBlock.options["logoutPath"] as string ?? "/logout";
         const expirationTime = authBlock.options["exp"] as number ?? 3600;
-        let secret = this.randomString(32);
+        let secret = `"${this.randomString(32)}"`;
 
         this._topAppend.push("const jsonwebtoken_ = require(\"jsonwebtoken\");");
 
@@ -533,7 +534,11 @@ export default class JavaScriptExpressJsTargetPlugin extends PluginBase {
 
         postValidOutput.push(`req.user = data;`);
 
-        return `validateJwtPayloadFor${authBlock.name}(data)`;
+        return [
+            `const payload = jsonwebtoken_.verify(jwt, ${secret});`,
+            `const result = await this.validateJwtPayloadFor${authBlock.name}(payload);`,
+            `const data = typeof result === "boolean" ? result ? payload : undefined : result;`
+        ];
     }
 
     private handleRoute(route: RouteNode, routerName: string): [string[], string[]] {
