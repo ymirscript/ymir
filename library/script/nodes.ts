@@ -382,3 +382,21 @@ export enum AuthType {
     APIKey = "API-Key",
     Bearer = "Bearer",
 }
+
+/**
+ * The generation mode of the bearer authentication.
+ */
+export enum BearerAuthGenerationMode {
+    /**
+     * Generates no bearer boilerplate code only the required authentication methods which are getting called from the routes.
+     */
+    None = 'NONE',
+    /**
+     * Generates everything but the JWT generation and validation.
+     */
+    Basic = 'BASIC',
+    /**
+     * Generates everything.
+     */
+    Full = 'FULL',
+}

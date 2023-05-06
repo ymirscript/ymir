@@ -1,6 +1,6 @@
 import * as path from "https://deno.land/std@0.157.0/path/mod.ts";
 
-import { BearerAuthGenerationMode, IPluginContext, IYmirFile, ProjectNode, YmirFileKind } from "../library/mod.ts";
+import { IPluginContext, IYmirFile, ProjectNode, YmirFileKind } from "../library/mod.ts";
 import { Lexer } from "./lexing/lexer.ts";
 import { Logger } from "../library/mod.ts";
 import { Parser, ParsingPolicy } from "./parsing/parser.ts";
@@ -15,7 +15,6 @@ export class CompilationContext implements IPluginContext {
     public readonly diagnostics: DiagnosticSink|undefined;
     public readonly config: IYmirConfig;
     public readonly configuration: { [key: string]: unknown; };
-    public readonly bearerAuthGenerationMode: BearerAuthGenerationMode;
 
     public additionalOutputDirectory: string;
 
@@ -29,7 +28,6 @@ export class CompilationContext implements IPluginContext {
         this._outputDirectory = path.join(this.workingDirectory, this.config.output!);
         this.additionalOutputDirectory = "";
         this.configuration = this.config.target ?? {};
-        this.bearerAuthGenerationMode = this.config.generateBearerAuth ?? BearerAuthGenerationMode.None;
 
         Logger.loglevel = this.config.debug ? LogLevel.Debug : LogLevel.Info;
 
