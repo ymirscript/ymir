@@ -252,16 +252,22 @@ export class AuthBlockNode extends SyntaxNode {
     public readonly isDefaultAccessPublic?: boolean;
 
     /**
+     * Additional options that are used in the authentication process.
+     */
+    public readonly options: MiddlewareOptions;
+
+    /**
      * Whether the authorization is in use or not.
      */
     public isAuthorizationInUse: boolean;
 
-    constructor(type: AuthType, source: "header"|"body"|"query", field: string, alias?: string, isDefaultAccessPublic?: "public"|"authenticated") {
+    constructor(type: AuthType, source: "header"|"body"|"query", field: string, alias?: string, isDefaultAccessPublic?: "public"|"authenticated", options?: MiddlewareOptions) {
         super();
         this.type = type;
         this.source = source;
         this.field = field;
         this.alias = alias;
+        this.options = options ?? {};
         this.isDefaultAccessPublic = isDefaultAccessPublic === "authenticated" ? false : true;
         this.isAuthorizationInUse = false;
     }
