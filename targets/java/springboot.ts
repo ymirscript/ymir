@@ -1,7 +1,7 @@
 import * as pathApi from "https://deno.land/std@0.182.0/path/mod.ts";
 import { encode as base64Encode } from "https://deno.land/std@0.182.0/encoding/base64.ts";
 
-import { AuthBlockNode, GlobalVariable, IPluginContext, Logger, MiddlewareNode, MiddlewareOptions, PluginBase, RouteNode, RouterNode, AuthType, ProjectNode, AuthenticateClauseNode, QueryParameterType, AbortError } from "../../library/mod.ts";
+import { AuthBlockNode, GlobalVariable, IPluginContext, Logger, MiddlewareNode, MiddlewareOptions, PluginBase, RouteNode, RouterNode, AuthType, ProjectNode, AuthenticateClauseNode, QueryParameterType, AbortError, BearerAuthGenerationMode } from "../../library/mod.ts";
 
 export default class JavaSpringBootTargetPlugin extends PluginBase {
 
@@ -290,12 +290,12 @@ export default class JavaSpringBootTargetPlugin extends PluginBase {
 
     private compileAuthBlockNode(node: AuthBlockNode): void {
         const authenticatorField = new FieldBuilder("authenticator", this.makePascalCase(node.name) + "Authenticator").addAnnotation("Autowired");
-        const authenticateMethod = new MethodBuilder("authenticate", "boolean");
+        const methods: MethodBuilder[] = [];
         const params: FieldBuilder[] = [];
         const authenticateCode: string[] = [];
         let authorizeCode: ((clause: AuthenticateClauseNode) => string[])|undefined = undefined;
-        let vars: string[] = [];
-        let pre: string[] = [];
+        const vars: {name: string, type: string}[] = [];
+        const pre: string[] = [];
 
         if (node.isDefaultAccessPublic === false) {
             if (this._defaultAuthenticate) {
@@ -306,32 +306,30 @@ export default class JavaSpringBootTargetPlugin extends PluginBase {
             this._defaultAuthenticate = new AuthenticateClauseNode(node.id);
         }
 
-        if (node.type === AuthType.APIKey) {
-            authenticateMethod.addParameter(new FieldBuilder("apiKey", "String"));
-            if (node.source === "query") {
-                params.push(new FieldBuilder("apiKey", "String").addAnnotation(`RequestParam("${node.field}")`));
-            } else if (node.source === "header") {
-                params.push(new FieldBuilder("apiKey", "String").addAnnotation(`RequestHeader("${node.field}")`));
-            } else {
-                Logger.fatal("body as authentication source is not supported for APIKey authentication for JavaSpringBoot target!");
-                return;
-            }
+        let caller: (authenticator: string) => string[] = (authenticator: string) => {
+            return [
+                ...pre,
+                `if (${(vars.map(x => x.name).map(x => `${x} == null`).join(" || "))} || !this.${authenticator}.authenticate(${vars.map(x => x.name).join(", ")})) {`,
+                `    throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.UNAUTHORIZED, "You are not authorized to access this resource!");`,
+                `}`
+            ];
+        };
 
-            vars = ["apiKey"];
+        if (node.type === AuthType.APIKey) {
+            this.compileApiKeyAuth(node, methods, params, vars);
         } else if (node.type === AuthType.Bearer) {
-            authenticateMethod.addParameter(new FieldBuilder("jwt", "String"));
-            params.push(new FieldBuilder("jwt", "String").addAnnotation(`RequestHeader("Authorization")`));
-            
-            vars = ["jwt"];
-            pre = ["jwt = jwt.substring(7);"];
+            caller = this.compileBearerAuth(node, methods, params, vars, pre);
         }
 
         const classBuilder = new ClassBuilder(this._authPackage, this.makePascalCase(node.name) + "Authenticator", true)
-            .addMethod(authenticateMethod);
+        
+        for (const method of methods) {
+            classBuilder.addMethod(method);
+        }
 
         if (node.isAuthorizationInUse) {
             const authorizeMethod = new MethodBuilder("authorize", "boolean")
-                .addParameters(...vars.map(x => new FieldBuilder(x, "String")))
+                .addParameters(...vars.map(x => new FieldBuilder(x.name, x.type)))
                 .addParameter(new FieldBuilder("roles", "String[]"));
 
             classBuilder.addMethod(authorizeMethod);
@@ -339,7 +337,7 @@ export default class JavaSpringBootTargetPlugin extends PluginBase {
             authorizeCode = (clause: AuthenticateClauseNode) => {
                 if (clause.authorization) {
                     return [
-                        `if (!this.${authenticatorField.name}.authorize(${vars.join(", ")}, new String[] { ${clause.authorization.join(", ")} })) {`,
+                        `if (!this.${authenticatorField.name}.authorize(${vars.map(x => x.name).join(", ")}, new String[] { ${clause.authorization.join(", ")} })) {`,
                         `    throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.FORBIDDEN, "You are not authorized to access this resource!");`,
                         `}`
                     ];
@@ -351,12 +349,7 @@ export default class JavaSpringBootTargetPlugin extends PluginBase {
 
         classBuilder.save(this._authPackagePath);
 
-        authenticateCode.push(...[
-            ...pre,
-            `if (${(vars.map(x => `${x} == null`).join(" || "))} || !this.${authenticatorField.name}.authenticate(${vars.join(", ")})) {`,
-            `    throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.UNAUTHORIZED, "You are not authorized to access this resource!");`,
-            `}`
-        ]);
+        authenticateCode.push(...caller(authenticatorField.name));
 
         this._authenticatorData[node.id] = {
             params,
@@ -364,6 +357,262 @@ export default class JavaSpringBootTargetPlugin extends PluginBase {
             authenticateCode: authenticateCode,
             authorizeCode: authorizeCode
         };
+    }
+
+    private compileApiKeyAuth(node: AuthBlockNode, methods: MethodBuilder[], params: FieldBuilder[], vars: {name: string, type: string}[]): void {
+        const authenticateMethod = new MethodBuilder("authenticate", "boolean").addParameter(new FieldBuilder("apiKey", "String"));
+        methods.push(authenticateMethod);
+        if (node.source === "query") {
+            params.push(new FieldBuilder("apiKey", "String").addAnnotation(`RequestParam("${node.field}")`));
+        } else if (node.source === "header") {
+            params.push(new FieldBuilder("apiKey", "String").addAnnotation(`RequestHeader("${node.field}")`));
+        } else {
+            Logger.fatal("body as authentication source is not supported for APIKey authentication for JavaSpringBoot target!");
+            return;
+        }
+    
+        vars.push({name: "apiKey", type: "String"});
+    }
+    
+    private compileBearerAuth(node: AuthBlockNode, methods: MethodBuilder[], params: FieldBuilder[], vars: {name: string, type: string}[], pre: string[]): (authenticator: string) => string[] {
+        pre.push("jwt = jwt.substring(7);");
+
+        const mode = node.options["mode"] as BearerAuthGenerationMode ?? BearerAuthGenerationMode.None;
+        let caller: (authenticator: string) => string[] = null!;
+        
+        if (mode === BearerAuthGenerationMode.None) {
+            caller = this.compileBearerAuthModeNone(node, methods, params, vars, pre);
+        } else if (mode === BearerAuthGenerationMode.Basic) {
+            caller = this.compileBearerAuthModeBasic(node, methods, params, vars, pre);
+        } else if (mode === BearerAuthGenerationMode.Full) {
+            caller = this.compileBearerAuthModeFull(node, methods, params, vars, pre);
+        } else {
+            Logger.fatal("Unknown bearer auth generation mode: %s", mode);
+            throw new AbortError();
+        }
+
+        return caller;
+    }
+
+    private compileBearerAuthModeNone(node: AuthBlockNode, methods: MethodBuilder[], params: FieldBuilder[], vars: {name: string, type: string}[], pre: string[]): (authenticator: string) => string[] {
+        const authenticateMethod = new MethodBuilder("authenticate", "boolean").addParameter(new FieldBuilder("jwt", "String"));
+        methods.push(authenticateMethod);
+        params.push(new FieldBuilder("jwt", "String").addAnnotation(`RequestHeader("Authorization")`));
+    
+        vars.push({name: "jwt", type: "String"});
+
+        return (authenticator: string) => {
+            return [
+                ...pre,
+                `if (${(vars.map(x => x.name).map(x => `${x} == null`).join(" || "))} || !this.${authenticator}.authenticate(${vars.map(x => x.name).join(", ")})) {`,
+                `    throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.UNAUTHORIZED, "You are not authorized to access this resource!");`,
+                `}`
+            ];
+        };
+    }
+
+    private compileBearerAuthModeBasic(authBlock: AuthBlockNode, methods: MethodBuilder[], params: FieldBuilder[], vars: {name: string, type: string}[], pre: string[]): (authenticator: string) => string[] {
+        const withLogout = authBlock.options["withLogout"] as boolean ?? false;
+        const loginPath = authBlock.options["loginPath"] as string ?? "/login";
+        const loginSource = authBlock.options["loginSource"] as string ?? "body";
+        const usernameField = authBlock.options["usernameField"] as string ?? "username";
+        const passwordField = authBlock.options["passwordField"] as string ?? "password";
+        const logoutPath = authBlock.options["logoutPath"] as string ?? "/logout";
+
+        vars.push({name: "jwt", type: "String"});
+        params.push(new FieldBuilder("jwt", "String").addAnnotation(`RequestHeader("Authorization")`));
+
+        methods.push(...[
+            new MethodBuilder(`validateJwt`, "java.util.Map<String, Object>")
+                .addParameter(new FieldBuilder("jwt", "String"))
+                .addComment("Validates the JWT and returns the claims if valid.", "@param jwt The JWT to validate.", "@return The claims of the JWT if valid, null otherwise."),
+            new MethodBuilder(`generateJwt`, "String")
+                .addParameter(new FieldBuilder("username", "String"))
+                .addParameter(new FieldBuilder("password", "String"))
+                .addComment("Generates a JWT for the specified user.", "@param username The username/email of the user.", "@param password The password of the user.", "@return The generated JWT, or null if the user could not be authenticated."),
+        ]);
+
+        const authController = new ClassBuilder(this._authPackage, this.makePascalCase(authBlock.name) + "AuthController")
+            .addImport("org.springframework.beans.factory.annotation.Autowired")
+            .addImport("org.springframework.web.bind.annotation.*")
+            .addImport(this._authPackage + ".*")
+            .addAnnotation("RestController")
+            .addField(new FieldBuilder("authenticator", this.makePascalCase(authBlock.name) + "Authenticator").addAnnotation("Autowired"));
+
+        const loginMethod = new MethodBuilder("login", "String")
+            .addAnnotation(`RequestMapping(path = "${loginPath}", method = RequestMethod.POST)`);
+
+        if (loginSource === "body") {
+            loginMethod.addParameter(new FieldBuilder("body", this.compileBodyOptionsAsDto({[usernameField]: "String", [passwordField]: "String"}, "LoginDto")).addAnnotation("RequestBody"));
+            loginMethod.addBodyLine(`return this.authenticator.generateJwt(body.get${this.makePascalCase(usernameField)}(), body.get${this.makePascalCase(passwordField)}());`);
+        } else if (loginSource === "query") {
+            loginMethod.addParameter(new FieldBuilder("username", "String").addAnnotation(`RequestParam("${usernameField}")`));
+            loginMethod.addParameter(new FieldBuilder("password", "String").addAnnotation(`RequestParam("${passwordField}")`));
+            loginMethod.addBodyLine(`return this.authenticator.generateJwt(username, password);`);
+        } else if (loginSource === "header") {
+            loginMethod.addParameter(new FieldBuilder("username", "String").addAnnotation(`RequestHeader("${usernameField}")`));
+            loginMethod.addParameter(new FieldBuilder("password", "String").addAnnotation(`RequestHeader("${passwordField}")`));
+            loginMethod.addBodyLine(`return this.authenticator.generateJwt(username, password);`);
+        } else {
+            Logger.fatal("Unknown login source: %s", loginSource);
+            throw new AbortError();
+        }
+
+        authController.addMethod(loginMethod);
+
+        if (withLogout) {
+            methods.push(new MethodBuilder(`logout`, "void")
+                .addParameter(new FieldBuilder("jwt", "String"))
+                .addComment("Logs out the user with the specified JWT.", "@param jwt The JWT of the user to log out.")
+            );
+
+            const logoutMethod = new MethodBuilder("logout", "org.springframework.http.ResponseEntity<Void>")
+                .addAnnotation(`RequestMapping(path = "${logoutPath}", method = RequestMethod.POST)`)
+                .addParameter(new FieldBuilder("jwt", "String").addAnnotation(`RequestHeader("Authorization")`));
+
+            logoutMethod.addBodyLine("this.authenticator.logout(jwt);");
+            logoutMethod.addBodyLine("return org.springframework.http.ResponseEntity.ok().build();");
+
+            authController.addMethod(logoutMethod);
+        }
+
+        authController.save(this._authPackagePath);
+
+        return (authenticator: string) => {
+            return [
+                ...pre,
+                `java.util.Map<String, Object> payload = this.${authenticator}.validateJwt(${vars.map(x => x.name).join(", ")});`,
+                `if (${(vars.map(x => x.name).map(x => `${x} == null`).join(" || "))} || payload == null) {`,
+                `    throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.UNAUTHORIZED, "You are not authorized to access this resource!");`,
+                `}`
+            ];
+        };
+    }
+
+    private compileBearerAuthModeFull(authBlock: AuthBlockNode, methods: MethodBuilder[], params: FieldBuilder[], vars: {name: string, type: string}[], pre: string[]): (authenticator: string) => string[] {
+        const withLogout = authBlock.options["withLogout"] as boolean ?? false;
+        const loginPath = authBlock.options["loginPath"] as string ?? "/login";
+        const loginSource = authBlock.options["loginSource"] as string ?? "body";
+        const usernameField = authBlock.options["usernameField"] as string ?? "username";
+        const passwordField = authBlock.options["passwordField"] as string ?? "password";
+        const logoutPath = authBlock.options["logoutPath"] as string ?? "/logout";
+        const expirationTime = authBlock.options["exp"] as number ?? 3600;
+        let secret = `"${this.randomString(32)}"`;
+
+        if (authBlock.options["secret"] instanceof GlobalVariable) {
+            if (authBlock.options["secret"].path.length > 0 && authBlock.options["secret"].path[0] === "env") {
+                secret = `process.env.${authBlock.options["secret"].name}`;
+            }
+        }
+
+        vars.push({name: "jwt", type: "String"});
+        params.push(new FieldBuilder("jwt", "String").addAnnotation(`RequestHeader("Authorization")`));
+
+        methods.push(...[
+            new MethodBuilder(`validateJwtPayload`, "Object")
+                .addParameter(new FieldBuilder("payload", "java.util.Map<String, Object>"))
+                .addComment("Validates the JWT payload and returns the transformed user data.", "@param payload The payload of the JWT to validate.", "@return The transformed user data of the JWT if valid, null otherwise."),
+            new MethodBuilder(`getJwtPayload`, "Map<String, Object>")
+                .addParameter(new FieldBuilder("username", "String"))
+                .addParameter(new FieldBuilder("password", "String"))
+                .addComment("Gets the JWT payload for the specified user.", "@param username The username/email of the user.", "@param password The password of the user.", "@return The JWT payload, or null if the user could not be authenticated."),
+        ]);
+
+        const authUtilClass = new ClassBuilder(this._authPackage, this.makePascalCase(authBlock.name) + "AuthUtil")
+            .addImport("com.auth0.jwt.JWT")
+            .addImport("com.auth0.jwt.algorithms.Algorithm")
+            .addField(new FieldBuilder("secret", "Algorithm", "private static final").setVal(`Algorithm.HMAC256(${secret})`))
+            .addField(new FieldBuilder("expirationTime", "long", "private static final").setVal(`${expirationTime}L`));
+
+        authUtilClass.addMethod(new MethodBuilder("generateJwt", "String")
+            .addParameter(new FieldBuilder("payload", "java.util.Map<String, Object>"))
+            .addComment("Generates a JWT for the specified payload.", "@param payload The payload of the JWT to generate.", "@return The generated JWT.")
+            .addBodyLine(`if (payload == null) {`)
+            .addBodyLine(`    throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.UNAUTHORIZED, "You are not authorized to access this resource!");`)
+            .addBodyLine(`}`)
+            .addBodyLine("return JWT.create().withPayload(payload).withExpiresAt(new java.util.Date(java.lang.System.currentTimeMillis() + expirationTime * 1000L)).sign(secret);")
+        );
+        authUtilClass.addMethod(new MethodBuilder("validateJwt", "java.util.Map<String, Object>")
+            .addParameter(new FieldBuilder("jwt", "String"))
+            .addComment("Validates the JWT and returns the claims if valid.", "@param jwt The JWT to validate.", "@return The claims of the JWT if valid, null otherwise.")
+            .addBodyLine("try {")
+            .addBodyLine("    return JWT.require(secret).build().verify(jwt).getClaims();")
+            .addBodyLine("} catch (com.auth0.jwt.exceptions.JWTVerificationException e) {")
+            .addBodyLine("    return null;")
+            .addBodyLine("}")
+        );
+
+        authUtilClass.save(this._authPackagePath);
+
+        const authController = new ClassBuilder(this._authPackage, this.makePascalCase(authBlock.name) + "AuthController")
+            .addImport("org.springframework.beans.factory.annotation.Autowired")
+            .addImport("org.springframework.web.bind.annotation.*")
+            .addImport(this._authPackage + ".*")
+            .addAnnotation("RestController")
+            .addField(new FieldBuilder("authenticator", this.makePascalCase(authBlock.name) + "Authenticator").addAnnotation("Autowired"));
+
+        const loginMethod = new MethodBuilder("login", "String")
+            .addAnnotation(`RequestMapping(path = "${loginPath}", method = RequestMethod.POST)`);
+
+        if (loginSource === "body") {
+            loginMethod.addParameter(new FieldBuilder("body", this.compileBodyOptionsAsDto({[usernameField]: "String", [passwordField]: "String"}, "LoginDto")).addAnnotation("RequestBody"));
+            loginMethod.addBodyLine(`return ${this._authPackage}.${this.makePascalCase(authBlock.name)}AuthUtil.generateJwt(this.authenticator.getJwtPayload(body.get${this.makePascalCase(usernameField)}(), body.get${this.makePascalCase(passwordField)}()));`);
+        } else if (loginSource === "query") {
+            loginMethod.addParameter(new FieldBuilder("username", "String").addAnnotation(`RequestParam("${usernameField}")`));
+            loginMethod.addParameter(new FieldBuilder("password", "String").addAnnotation(`RequestParam("${passwordField}")`));
+            loginMethod.addBodyLine(`return ${this._authPackage}.${this.makePascalCase(authBlock.name)}AuthUtil.generateJwt(this.authenticator.getJwtPayload(username, password));`);
+        } else if (loginSource === "header") {
+            loginMethod.addParameter(new FieldBuilder("username", "String").addAnnotation(`RequestHeader("${usernameField}")`));
+            loginMethod.addParameter(new FieldBuilder("password", "String").addAnnotation(`RequestHeader("${passwordField}")`));
+            loginMethod.addBodyLine(`return ${this._authPackage}.${this.makePascalCase(authBlock.name)}AuthUtil.generateJwt(this.authenticator.getJwtPayload(username, password));`);
+        } else {
+            Logger.fatal("Unknown login source: %s", loginSource);
+            throw new AbortError();
+        }
+
+        authController.addMethod(loginMethod);
+
+        if (withLogout) {
+            methods.push(new MethodBuilder(`logout`, "void")
+                .addParameter(new FieldBuilder("jwt", "String"))
+                .addComment("Logs out the user with the specified JWT.", "@param jwt The JWT of the user to log out.")
+            );
+
+            const logoutMethod = new MethodBuilder("logout", "org.springframework.http.ResponseEntity<Void>")
+                .addAnnotation(`RequestMapping(path = "${logoutPath}", method = RequestMethod.POST)`)
+                .addParameter(new FieldBuilder("jwt", "String").addAnnotation(`RequestHeader("Authorization")`));
+
+            logoutMethod.addBodyLine("this.authenticator.logout(jwt);");
+            logoutMethod.addBodyLine("return org.springframework.http.ResponseEntity.ok().build();");
+
+            authController.addMethod(logoutMethod);
+        }
+
+        authController.save(this._authPackagePath);
+
+        return (authenticator: string) => {
+            return [
+                ...pre,
+                `java.util.Map<String, Object> payload = ${this._authPackage}.${this.makePascalCase(authBlock.name)}AuthUtil.validateJwt(${vars.map(x => x.name).join(", ")});`,
+                `if (${(vars.map(x => x.name).map(x => `${x} == null`).join(" || "))} || payload == null) {`,
+                `    throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.UNAUTHORIZED, "You are not authorized to access this resource!");`,
+                `}`,
+                "",
+                `Object userData = this.${authenticator}.validateJwtPayload(payload);`,
+                `if (userData == null) {`,
+                `    throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.UNAUTHORIZED, "You are not authorized to access this resource!");`,
+                `}`
+            ];
+        };
+    }
+
+    private randomString(length: number): string {
+        const chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        let result = "";
+        for (let i = 0; i < length; i++) {
+            result += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return result;
     }
 
     private getJavaTypeOfType(queryType: string): string {
@@ -730,7 +979,8 @@ class MethodBuilder {
 class FieldBuilder {
 
     private readonly _annotations: string[] = [];
-    
+    private _value: string = "";
+
     constructor(
         private readonly _name: string,
         private readonly _type: string,
@@ -739,6 +989,11 @@ class FieldBuilder {
 
     public get name(): string {
         return this._name;
+    }
+
+    public setVal(value: string): FieldBuilder {
+        this._value = value;
+        return this;
     }
 
     public setAsField(): FieldBuilder {
@@ -759,6 +1014,10 @@ class FieldBuilder {
         });
 
         result += `${this._accessModifier}${this._type} ${this._name}`;
+
+        if (this._value !== "") {
+            result += ` = ${this._value}`;
+        }
 
         return result;
     }
