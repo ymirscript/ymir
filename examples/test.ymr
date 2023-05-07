@@ -1,4 +1,4 @@
-target Swagger;
+target Swagger, JavaScript_ExpressJS, Java_SpringBoot;
 
 use json;
 
@@ -10,7 +10,8 @@ use cors(
 
 auth Bearer as apiKey (
     source: header,
-    defaultAccess: authenticated
+    defaultAccess: authenticated,
+    mode: "FULL"
 );
 
 router /auth 

@@ -1,6 +1,7 @@
 import * as pathApi from "https://deno.land/std@0.182.0/path/mod.ts";
 
-import { AuthBlockNode, GlobalVariable, IPluginContext, Logger, MiddlewareNode, MiddlewareOptions, PathNode, PluginBase, RouteNode, RouterNode, AuthType, ProjectNode, AbortError } from "../../library/mod.ts";
+import { AuthBlockNode, GlobalVariable, IPluginContext, Logger, MiddlewareNode, MiddlewareOptions, PathNode, PluginBase, RouteNode, RouterNode, AuthType, ProjectNode, AbortError, BearerAuthGenerationMode } from "../../library/mod.ts";
+import { def } from "https://deno.land/std@0.182.0/yaml/schema/default.ts";
 
 export default class JavaScriptExpressJsTargetPlugin extends PluginBase {
 
@@ -8,6 +9,7 @@ export default class JavaScriptExpressJsTargetPlugin extends PluginBase {
     private _exports: string[] = ["startServer", "messages", "YmirRestBase"];
     private _wasEnvUsed = false;
     private _defaultAuthenticate: string|undefined = undefined;
+    private _topAppend: string[] = [];
     private readonly _authHandlers: Record<string, string> = {};
 
     public get targetFor(): string | undefined {
@@ -64,6 +66,8 @@ export default class JavaScriptExpressJsTargetPlugin extends PluginBase {
         ];
 
         const [routerOutput, _] = this.handleRouter(context.projectNode, true, "");
+
+        output.push(...this._topAppend);
         output.push(...routerOutput);
 
         output.push(...[
@@ -87,6 +91,7 @@ export default class JavaScriptExpressJsTargetPlugin extends PluginBase {
     private handleRouter(routerNode: RouterNode, isApp: boolean, parentName: string): [string[], string[]] {
         const routerName = isApp ? 'app' : routerNode.path.name;
         const output: string[] = [];
+        const preBuildFunctionLines: string[] = [];
 
         if (isApp) {
             if (routerNode instanceof ProjectNode) {
@@ -111,8 +116,9 @@ export default class JavaScriptExpressJsTargetPlugin extends PluginBase {
 
             if (routerNode instanceof ProjectNode) {
                 for (const authBlock of Object.values(routerNode.authBlocks)) {
-                    const authBlockOutput = this.handleAuthBlock(authBlock);
+                    const [authBlockOutput, authBlockBuildOutput] = this.handleAuthBlock(authBlock);
                     output.push(...authBlockOutput.map((line) => "    " + line));
+                    preBuildFunctionLines.push(...authBlockBuildOutput);
                 }
             }
         }
@@ -199,6 +205,10 @@ export default class JavaScriptExpressJsTargetPlugin extends PluginBase {
                 output.push(`        ${line}`);
             }
 
+            for (const line of preBuildFunctionLines) {
+                output.push(`        ${line}`);
+            }
+
             output.push(...[
                 "        app.use((err, req, res, next) => {",
                 "            if (err) {",
@@ -215,8 +225,9 @@ export default class JavaScriptExpressJsTargetPlugin extends PluginBase {
         return [output, isApp ? [] : routerBuildFunctionLines];
     }
 
-    private handleAuthBlock(authBlock: AuthBlockNode): string[] {
+    private handleAuthBlock(authBlock: AuthBlockNode): [string[], string[]] {
         const output: string[] = [];
+        const buildOutput: string[] = [];
 
         if (authBlock.isDefaultAccessPublic === false) {
             if (this._defaultAuthenticate) {
@@ -273,14 +284,27 @@ export default class JavaScriptExpressJsTargetPlugin extends PluginBase {
                     ]);
                 }
                 break;
+            // deno-lint-ignore no-case-declarations
             case AuthType.Bearer:
                 this._authHandlers[authBlock.id] = authBlock.name; 
+                output.push("");
+
+                const mode = authBlock.options["mode"] as BearerAuthGenerationMode ?? BearerAuthGenerationMode.None;
+                const postValidOutput: string[] = [];
+                let caller = [];
+    
+                if (mode === BearerAuthGenerationMode.None) {
+                    caller = this.handleBearerAuthForModeNone(output, postValidOutput, authBlock);
+                } else if (mode === BearerAuthGenerationMode.Basic) {
+                    caller = this.handleBearerAuthForModeBasic(output, buildOutput, postValidOutput, authBlock);
+                } else if (mode === BearerAuthGenerationMode.Full) {
+                    caller = this.handleBearerAuthForModeFull(output, buildOutput, postValidOutput, authBlock);
+                } else {
+                    Logger.error("Unknown bearer auth generation mode.");
+                    throw new AbortError();
+                }
 
                 output.push(...[
-                    "",
-                    `async authenticate${authBlock.name}(jwt) {`,
-                    "    return true;",
-                    "}",
                     "",
                     `async #handle${authBlock.name}Authentication(req, res) {`,
                 ]);
@@ -298,11 +322,14 @@ export default class JavaScriptExpressJsTargetPlugin extends PluginBase {
                     "        return undefined;",
                     "    }",
                     "",
-                    "    const isValid = await this.authenticate" + authBlock.name + "(jwt);",
-                    "    if (!isValid) {",
+                    ...caller.map((line) => "    " + line),
+                    "",
+                    "    if (!data) {",
                     "        res.status(401).send(messages._401);",
                     "        return undefined;",
                     "    }",
+                    "",
+                    ...postValidOutput.map((line) => "    " + line),
                     "",
                     "    return jwt;",
                     "}",
@@ -311,7 +338,7 @@ export default class JavaScriptExpressJsTargetPlugin extends PluginBase {
                 if (authBlock.isAuthorizationInUse) {
                     output.push(...[
                         "",
-                        `async authorize${authBlock.name}(jwt, roles) {`,
+                        `async authorize${authBlock.name}(req, roles) {`,
                         "    return true;",
                         "}"
                     ]);
@@ -319,7 +346,199 @@ export default class JavaScriptExpressJsTargetPlugin extends PluginBase {
                 break;
         }
 
-        return output;
+        return [output, buildOutput];
+    }
+
+    private handleBearerAuthForModeNone(output: string[], postValidOutput: string[], authBlock: AuthBlockNode): string[] {
+        output.push(...[
+            `async authenticate${authBlock.name}(jwt) {`,
+            "    return true;",
+            "}",
+        ]);
+
+        postValidOutput.push(`req.user = jwt;`);
+
+        return [`const data = await this.authenticate${authBlock.name}(jwt);`];
+    }
+
+    private handleBearerAuthForModeBasic(output: string[], buildOutput: string[], postValidOutput: string[], authBlock: AuthBlockNode): string[] {
+        const withLogout = authBlock.options["withLogout"] as boolean ?? false;
+        const loginPath = authBlock.options["loginPath"] as string ?? "/login";
+        const loginSource = authBlock.options["loginSource"] as string ?? "body";
+        const usernameField = authBlock.options["usernameField"] as string ?? "username";
+        const passwordField = authBlock.options["passwordField"] as string ?? "password";
+        const logoutPath = authBlock.options["logoutPath"] as string ?? "/logout";
+
+        output.push(...[
+            "/**",
+            " * Validates the given JWT.",
+            " * @param {string} jwt The JWT to validate.",
+            " * @returns {object|undefined} The payload of the JWT or undefined if the validation failed.",
+            " */",
+            `async validateJwtFor${authBlock.name}(jwt) {`,
+            "    return undefined;",
+            "}",
+            "",
+            "/**",
+            " * Generates a JWT for the given username/email and password.",
+            " * @param {string} username The username/email.",
+            " * @param {string} password The password.",
+            " * @returns {string|undefined} The generated JWT or undefined if the authentication failed.",
+            " */",
+            `async generateJwtFor${authBlock.name}(username, password) {`,
+            "    return undefined;",
+            "}"
+        ]);
+
+        if (withLogout) {
+            output.push(...[
+                "",
+                "/**",
+                " * Logs the user out/ invalidates the JWT.",
+                " * @param {string} jwt The JWT of the user.",
+                " */",
+                `async logout${authBlock.name}(jwt) {`,
+                "    return;",
+                "}",
+            ]);
+        }
+
+        buildOutput.push(...[
+            `app.post("${loginPath}", async (req, res) => {`,
+            `    const ${usernameField} = req.${loginSource}[\"${usernameField}\"];`,
+            `    const ${passwordField} = req.${loginSource}[\"${passwordField}\"];`,
+            "",
+            `    const jwt = await this.generateJwtFor${authBlock.name}(${usernameField}, ${passwordField});`,
+            "",
+            "    if (jwt === undefined) {",
+            "        res.status(401).send(messages._401);",
+            "        return;",
+            "    }",
+            "",
+            "    res.send(jwt);",
+            "});",
+        ]);
+
+        if (withLogout) {
+            buildOutput.push(...[
+                "",
+                `app.post("${logoutPath}", async (req, res) => {`,
+                `    const jwt = getHeader(req.headers, \"Authorization\")?.replace(\"Bearer \", \"\");`,
+                "",
+                `    if (jwt === undefined) {`,
+                "        res.status(401).send(messages._401);",
+                "        return;",
+                "    }",
+                "",
+                `    await this.logout${authBlock.name}(jwt);`,
+                "",
+                "    res.send();",
+                "});",
+            ]);
+        }
+
+        postValidOutput.push(`req.user = data;`);
+
+        return [`const data = await this.validateJwtFor${authBlock.name}(jwt);`];
+    }
+
+    private handleBearerAuthForModeFull(output: string[], buildOutput: string[], postValidOutput: string[], authBlock: AuthBlockNode): string[] {
+        const withLogout = authBlock.options["withLogout"] as boolean ?? false;
+        const loginPath = authBlock.options["loginPath"] as string ?? "/login";
+        const loginSource = authBlock.options["loginSource"] as string ?? "body";
+        const usernameField = authBlock.options["usernameField"] as string ?? "username";
+        const passwordField = authBlock.options["passwordField"] as string ?? "password";
+        const logoutPath = authBlock.options["logoutPath"] as string ?? "/logout";
+        const expirationTime = authBlock.options["exp"] as number ?? 3600;
+        let secret = `"${this.randomString(32)}"`;
+
+        this._topAppend.push("const jsonwebtoken_ = require(\"jsonwebtoken\");");
+
+        if (authBlock.options["secret"] instanceof GlobalVariable) {
+            if (authBlock.options["secret"].path.length > 0 && authBlock.options["secret"].path[0] === "env") {
+                secret = `process.env.${authBlock.options["secret"].name}`;
+            }
+        }
+
+        output.push(...[
+            "/**",
+            " * Validates the given JWT payload.",
+            " * @param {object} payload The payload of the JWT.",
+            " * @returns {boolean|object} Whether or not the payload is valid or the transformed payload.",
+            " */",
+            `async validateJwtPayloadFor${authBlock.name}(payload) {`,
+            "    return false;",
+            "}",
+            "",
+            "/**",
+            " * Returns the payload for the given username/email and password.",
+            " * @param {string} username The username/email.",
+            " * @param {string} password The password.",
+            " * @returns {object|undefined} The payload or undefined if the authentication failed.",
+            " */",
+            `async getJwtPayloadFor${authBlock.name}(username, password) {`,
+            "    return undefined;",
+            "}"
+        ]);
+
+        if (withLogout) {
+            output.push(...[
+                "",
+                "/**",
+                " * Logs the user out/ invalidates the JWT. E.g: Integrate an ID in the payload and invalidate this ID on logout.",
+                " * @param {object} payload The payload of the JWT.",
+                " */",
+                `async logout${authBlock.name}(payload) {`,
+                "    return;",
+                "}",
+            ]);
+        }
+
+        buildOutput.push(...[
+            `app.post("${loginPath}", async (req, res) => {`,
+            `    const ${usernameField} = req.${loginSource}[\"${usernameField}\"];`,
+            `    const ${passwordField} = req.${loginSource}[\"${passwordField}\"];`,
+            "",
+            `    const payload = await this.getJwtPayloadFor${authBlock.name}(${usernameField}, ${passwordField});`,
+            "",
+            "    if (payload === undefined) {",
+            "        res.status(401).send(messages._401);",
+            "        return;",
+            "    }",
+            "",
+            `    const jwt = jsonwebtoken_.sign(payload, ${secret}, { expiresIn: '${expirationTime}s' });`,
+            "",
+            "    res.send(jwt);",
+            "});",
+        ]);
+
+        if (withLogout) {
+            buildOutput.push(...[
+                "",
+                `app.post("${logoutPath}", async (req, res) => {`,
+                `    const jwt = getHeader(req.headers, \"Authorization\")?.replace(\"Bearer \", \"\");`,
+                "",
+                `    if (jwt === undefined) {`,
+                "        res.status(401).send(messages._401);",
+                "        return;",
+                "    }",
+                "",
+                `    const payload = jsonwebtoken_.verify(jwt, ${secret});`,
+                "",
+                `    await this.logout${authBlock.name}(payload);`,
+                "",
+                "    res.send();",
+                "});",
+            ]);
+        }
+
+        postValidOutput.push(`req.user = data;`);
+
+        return [
+            `const payload = jsonwebtoken_.verify(jwt, ${secret});`,
+            `const result = await this.validateJwtPayloadFor${authBlock.name}(payload);`,
+            `const data = typeof result === "boolean" ? result ? payload : undefined : result;`
+        ];
     }
 
     private handleRoute(route: RouteNode, routerName: string): [string[], string[]] {
@@ -351,7 +570,7 @@ export default class JavaScriptExpressJsTargetPlugin extends PluginBase {
 
             if (route.authenticate.authorization) {
                 output.push(...[
-                    `    const isAuthorized = await this.authorize${this._authHandlers[route.authenticate.authBlock]}(authResult, [${route.authenticate.authorization.join(", ")}]);`,
+                    `    const isAuthorized = await this.authorize${this._authHandlers[route.authenticate.authBlock]}(req, [${route.authenticate.authorization.join(", ")}]);`,
                     "    if (!isAuthorized) {",
                     "        res.status(403).send(messages._403);",
                     "        return;",
@@ -511,5 +730,14 @@ export default class JavaScriptExpressJsTargetPlugin extends PluginBase {
 
     private registerMiddlewareHandler(name: string, handler: (router: string, node: MiddlewareNode) => string[]): void {
         this._middlewareHandlers.set(name, handler);
+    }
+
+    private randomString(length: number): string {
+        const chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        let result = "";
+        for (let i = 0; i < length; i++) {
+            result += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return result;
     }
 }

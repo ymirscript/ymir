@@ -1,4 +1,5 @@
 import * as path from "https://deno.land/std@0.157.0/path/mod.ts";
+import { BearerAuthGenerationMode } from "../library/mod.ts";
 
 /**
  * Loads the config from the working directory.
@@ -47,6 +48,11 @@ export interface IYmirConfig {
      * The target specific configuration.
      */
     readonly target?: {[key: string]: unknown};
+
+    /**
+     * The generation mode of the bearer authentication.
+     */
+    readonly generateBearerAuth?: BearerAuthGenerationMode;
 }
 
 function getDefaultConfig(): IYmirConfig {

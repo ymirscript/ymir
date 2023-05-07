@@ -209,7 +209,13 @@ export class Parser {
             }
         }
 
-        return new AuthBlockNode(type, body["source"], body["field"] as string || "", alias, defaultAccess);
+        const source = body["source"];
+        delete body["source"];
+        const field = body["field"];
+        delete body["field"];
+        delete body["defaultAccess"];
+
+        return new AuthBlockNode(type, source, field as string || "", alias, defaultAccess, body);
     }
 
     /**
