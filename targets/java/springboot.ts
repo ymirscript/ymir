@@ -6,7 +6,7 @@ import { AuthBlockNode, GlobalVariable, IPluginContext, Logger, MiddlewareNode, 
 export default class JavaSpringBootTargetPlugin extends PluginBase {
 
     private readonly _middlewareHandlers: { [key: string]: (node: MiddlewareNode) => void } = {};
-    private readonly _authenticatorData: {[key: string]: { params: FieldBuilder[], field: FieldBuilder, authenticateCode: string[], authorizeCode: ((clause: AuthenticateClauseNode) => string[])|undefined }} = {};
+    private readonly _authenticatorData: {[key: string]: { params: FieldBuilder[], field: FieldBuilder, authenticateCode: string[], authorizeCode: ((clause: AuthenticateClauseNode) => string[])|undefined, additionalHandlerParams: ({name: string, type: string})[] }} = {};
     private readonly _createdDtos: {[key: string]: string} = {};
     private _config: TargetConfig = null!;
     private _mainPackagePath: string = null!;
@@ -118,6 +118,8 @@ export default class JavaSpringBootTargetPlugin extends PluginBase {
             interfaceMethod.addComment(node.description);
         }
 
+        const callParams: string[] = [];
+
         authenticates.forEach(authenticate => {
             const authData = this._authenticatorData[authenticate.authBlock];
             if (!authData) {
@@ -127,6 +129,11 @@ export default class JavaSpringBootTargetPlugin extends PluginBase {
 
             classBuilder.addField(authData.field);
 
+            for (const additionalParam of authData.additionalHandlerParams) {
+                interfaceMethod.addParameter(new FieldBuilder(additionalParam.name, additionalParam.type));
+                callParams.push(additionalParam.name);
+            }
+
             authData.params.forEach(param => method.addParameter(param));
             authData.authenticateCode.forEach(code => method.addBodyLine(code));
         
@@ -135,10 +142,9 @@ export default class JavaSpringBootTargetPlugin extends PluginBase {
             }
         });
 
-        const callParams: string[] = [];
-
         if (this._config.appendRequest) {
             method.addParameter(new FieldBuilder("request", "jakarta.servlet.http.HttpServletRequest"));
+            interfaceMethod.addParameter(new FieldBuilder("request", "jakarta.servlet.http.HttpServletRequest"));
             callParams.push("request");
         }
 
@@ -295,7 +301,9 @@ export default class JavaSpringBootTargetPlugin extends PluginBase {
         const authenticateCode: string[] = [];
         let authorizeCode: ((clause: AuthenticateClauseNode) => string[])|undefined = undefined;
         const vars: {name: string, type: string}[] = [];
+        const additionalHandlerParams: {name: string, type: string}[] = [];
         const pre: string[] = [];
+
 
         if (node.isDefaultAccessPublic === false) {
             if (this._defaultAuthenticate) {
@@ -318,7 +326,7 @@ export default class JavaSpringBootTargetPlugin extends PluginBase {
         if (node.type === AuthType.APIKey) {
             this.compileApiKeyAuth(node, methods, params, vars);
         } else if (node.type === AuthType.Bearer) {
-            caller = this.compileBearerAuth(node, methods, params, vars, pre);
+            caller = this.compileBearerAuth(node, methods, params, vars, pre, additionalHandlerParams);
         }
 
         const classBuilder = new ClassBuilder(this._authPackage, this.makePascalCase(node.name) + "Authenticator", true)
@@ -355,7 +363,8 @@ export default class JavaSpringBootTargetPlugin extends PluginBase {
             params,
             field: authenticatorField,
             authenticateCode: authenticateCode,
-            authorizeCode: authorizeCode
+            authorizeCode: authorizeCode,
+            additionalHandlerParams
         };
     }
 
@@ -374,18 +383,18 @@ export default class JavaSpringBootTargetPlugin extends PluginBase {
         vars.push({name: "apiKey", type: "String"});
     }
     
-    private compileBearerAuth(node: AuthBlockNode, methods: MethodBuilder[], params: FieldBuilder[], vars: {name: string, type: string}[], pre: string[]): (authenticator: string) => string[] {
+    private compileBearerAuth(node: AuthBlockNode, methods: MethodBuilder[], params: FieldBuilder[], vars: {name: string, type: string}[], pre: string[], additionalHandlerParams: {name: string, type: string}[]): (authenticator: string) => string[] {
         pre.push("jwt = jwt.substring(7);");
 
         const mode = node.options["mode"] as BearerAuthGenerationMode ?? BearerAuthGenerationMode.None;
         let caller: (authenticator: string) => string[] = null!;
         
         if (mode === BearerAuthGenerationMode.None) {
-            caller = this.compileBearerAuthModeNone(node, methods, params, vars, pre);
+            caller = this.compileBearerAuthModeNone(methods, params, vars, pre);
         } else if (mode === BearerAuthGenerationMode.Basic) {
             caller = this.compileBearerAuthModeBasic(node, methods, params, vars, pre);
         } else if (mode === BearerAuthGenerationMode.Full) {
-            caller = this.compileBearerAuthModeFull(node, methods, params, vars, pre);
+            caller = this.compileBearerAuthModeFull(node, methods, params, vars, pre, additionalHandlerParams);
         } else {
             Logger.fatal("Unknown bearer auth generation mode: %s", mode);
             throw new AbortError();
@@ -394,7 +403,7 @@ export default class JavaSpringBootTargetPlugin extends PluginBase {
         return caller;
     }
 
-    private compileBearerAuthModeNone(node: AuthBlockNode, methods: MethodBuilder[], params: FieldBuilder[], vars: {name: string, type: string}[], pre: string[]): (authenticator: string) => string[] {
+    private compileBearerAuthModeNone(methods: MethodBuilder[], params: FieldBuilder[], vars: {name: string, type: string}[], pre: string[]): (authenticator: string) => string[] {
         const authenticateMethod = new MethodBuilder("authenticate", "boolean").addParameter(new FieldBuilder("jwt", "String"));
         methods.push(authenticateMethod);
         params.push(new FieldBuilder("jwt", "String").addAnnotation(`RequestHeader("Authorization")`));
@@ -489,7 +498,7 @@ export default class JavaSpringBootTargetPlugin extends PluginBase {
         };
     }
 
-    private compileBearerAuthModeFull(authBlock: AuthBlockNode, methods: MethodBuilder[], params: FieldBuilder[], vars: {name: string, type: string}[], pre: string[]): (authenticator: string) => string[] {
+    private compileBearerAuthModeFull(authBlock: AuthBlockNode, methods: MethodBuilder[], params: FieldBuilder[], vars: {name: string, type: string}[], pre: string[], additionalHandlerParams: {name: string, type: string}[]): (authenticator: string) => string[] {
         const withLogout = authBlock.options["withLogout"] as boolean ?? false;
         const loginPath = authBlock.options["loginPath"] as string ?? "/login";
         const loginSource = authBlock.options["loginSource"] as string ?? "body";
@@ -589,6 +598,7 @@ export default class JavaSpringBootTargetPlugin extends PluginBase {
         }
 
         authController.save(this._authPackagePath);
+        additionalHandlerParams.push({name: "userData", type: "Object"});
 
         return (authenticator: string) => {
             return [
@@ -979,13 +989,15 @@ class MethodBuilder {
 class FieldBuilder {
 
     private readonly _annotations: string[] = [];
-    private _value: string = "";
+    private _value: string;
 
     constructor(
         private readonly _name: string,
         private readonly _type: string,
         private _accessModifier: string = ""
-    ) {}
+    ) {
+        this._value = "";
+    }
 
     public get name(): string {
         return this._name;
@@ -997,7 +1009,9 @@ class FieldBuilder {
     }
 
     public setAsField(): FieldBuilder {
-        this._accessModifier = "private ";
+        if (this._accessModifier === "") {
+            this._accessModifier = "private ";
+        }   
         return this;
     }
 
@@ -1012,6 +1026,10 @@ class FieldBuilder {
         this._annotations.forEach(annotation => {
             result += `@${annotation} `;
         });
+
+        if (!this._accessModifier.endsWith(" ") && this._accessModifier !== "") {
+            this._accessModifier += " ";
+        }
 
         result += `${this._accessModifier}${this._type} ${this._name}`;
 
