@@ -508,7 +508,7 @@ export default class JavaScriptExpressJsTargetPlugin extends PluginBase {
             "",
             `    const jwt = jsonwebtoken_.sign(payload, ${secret}, { expiresIn: '${expirationTime}s' });`,
             "",
-            "    res.send(jwt);",
+            "    res.json({token: jwt});",
             "});",
         ]);
 
@@ -694,7 +694,7 @@ export default class JavaScriptExpressJsTargetPlugin extends PluginBase {
             ];
         }
 
-        let origin = "*";
+        let origin = "\"*\"";
 
         if (node.options["origin"] !== undefined) {
             const originOption = node.options["origin"];

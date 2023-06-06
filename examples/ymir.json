@@ -1,5 +1,5 @@
 {
-    "debug": true,
+    "debug": false,
     "detailedErrors": true,
     "target": {
         "useSpringSecurity": false,
@@ -9,5 +9,8 @@
             "dto": "dto",
             "config": ""
         }
+    },
+    "frontend": {
+        "mode": "vanilla"
     }
 }
