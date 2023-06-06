@@ -1,12 +1,13 @@
 import * as path from "https://deno.land/std@0.157.0/path/mod.ts";
 
-import { IPluginContext, IYmirFile, ProjectNode, YmirFileKind } from "../library/mod.ts";
+import { AuthBlockNode, IPluginContext, IYmirFile, ProjectNode, RouteNode, YmirFileKind } from "../library/mod.ts";
 import { Lexer } from "./lexing/lexer.ts";
 import { Logger } from "../library/mod.ts";
 import { Parser, ParsingPolicy } from "./parsing/parser.ts";
 import { DiagnosticSink } from "./parsing/diagnostics.ts";
 import { IYmirConfig, loadConfig } from "./config.ts";
 import { LogLevel } from "../library/logger.ts";
+import { AuthType } from "../library/script/nodes.ts";
 
 export class CompilationContext implements IPluginContext {
 

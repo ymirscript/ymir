@@ -9,6 +9,7 @@ import { AbortError, Logger, PluginBase } from "../library/mod.ts";
 import JavaScriptExpressJsTargetPlugin from "../targets/javascript/expressjs.ts";
 import JavaSpringBootTargetPlugin from "../targets/java/springboot.ts";
 import SwaggerTargetPlugin from "../targets/swagger/index.ts";
+import { generateFrontend } from "./frontend/generator.ts";
 
 const plugins = [
     new JavaScriptExpressJsTargetPlugin(),
@@ -104,6 +105,10 @@ async function run(args: string[]): Promise<void> {
                 return;
             }
         }
+    }
+
+    if (context.config.frontend) {
+        await generateFrontend(context.config.frontend, context.projectNode, context.workingDirectory);
     }
 
     const end = Date.now();

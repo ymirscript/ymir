@@ -22,6 +22,11 @@ export function loadConfig(workingDir: string): IYmirConfig {
     return {
         ...getDefaultConfig(),
         ...config,
+        frontend: config.frontend ? {
+            mode: FrontendGenerationMode.Vanilla,
+            output: "./frontend",
+            ...config.frontend,
+        } : undefined,
     };
 }
 
@@ -53,6 +58,35 @@ export interface IYmirConfig {
      * The generation mode of the bearer authentication.
      */
     readonly generateBearerAuth?: BearerAuthGenerationMode;
+
+    /**
+     * The frontend config. If not specified, the frontend will not be generated.
+     */
+    readonly frontend?: IFrontendConfig;
+}
+
+/**
+ * Describes the schema of the frontend configuration.
+ */
+export interface IFrontendConfig {
+    /**
+     * The generation mode of the frontend.
+     */
+    mode?: FrontendGenerationMode;
+    /**
+     * The output is another directory where the frontend will be generated.
+     */
+    output?: string;
+}
+
+/**
+ * The generation mode of the frontend.
+ */
+export enum FrontendGenerationMode {
+    /**
+     * Pure HTML frontend with Vite.
+     */
+    Vanilla = "vanilla",
 }
 
 function getDefaultConfig(): IYmirConfig {
