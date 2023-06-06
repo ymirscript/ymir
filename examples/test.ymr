@@ -6,7 +6,8 @@ use cors;
 auth Bearer as apiKey (
     source: header,
     defaultAccess: authenticated,
-    mode: "FULL"
+    mode: "FULL",
+    withLogout: true
 );
 
 router /auth 
