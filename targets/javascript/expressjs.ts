@@ -694,7 +694,7 @@ export default class JavaScriptExpressJsTargetPlugin extends PluginBase {
             ];
         }
 
-        let origin = "*";
+        let origin = "\"*\"";
 
         if (node.options["origin"] !== undefined) {
             const originOption = node.options["origin"];

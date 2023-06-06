@@ -1,12 +1,7 @@
-target Swagger, JavaScript_ExpressJS, Java_SpringBoot;
+target JavaScript_ExpressJS;
 
 use json;
-
-use env;
-
-use cors(
-	origin: @env.ALLOWED_ORIGIN
-);
+use cors;
 
 auth Bearer as apiKey (
     source: header,
