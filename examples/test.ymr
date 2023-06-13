@@ -10,13 +10,9 @@ auth Bearer as apiKey (
     withLogout: true
 );
 
-router /auth 
+router /api 
     as apiRouter
 {
-    // Prints the Hello message with the Name concatenated
-    GET /hello/:name
-        as HelloRoute
-
     POST /person
         as CreatePerson
         body (
@@ -27,14 +23,42 @@ router /auth
                 street: string
             }
         )
+        render form
 
-    router /v2
-    {
-        include "include.ymr"
-    }
-}
+    GET /persons
+        as GetPersons
+        response (
+            id: int,
+            name: string,
+            age: int,
+            address: {
+                zipCode: int,
+                street: string
+            }
+        )
+        render table(
+            paginate: 20,
+            search: true,
 
-router /another-router
-{
-    GET /test;
+            // if not specified, the columns are properties of depth 1; with @integrate, the integration actions are added
+            columns: ["id", "name", "age", "address.zipCode", "address.street", "@integrate"],
+            integrate: ["DeletePerson", "UpdatePerson"]
+        )
+
+    PATCH /person/:id
+        as UpdatePerson
+        body (
+            name: string,
+            age: int,
+            address: {
+                zipCode: int,
+                street: string
+            }
+        )
+        render form(
+            updateId: ":id"
+        )
+
+    DELETE /person/:id
+        as DeletePerson
 }

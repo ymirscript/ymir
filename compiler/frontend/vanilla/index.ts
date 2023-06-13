@@ -1,7 +1,8 @@
-import { AuthBlockNode, ProjectNode } from "../../../library/mod.ts";
-import { AuthType } from "../../../library/script/nodes.ts";
+import { AuthBlockNode, ProjectNode, RouteNode, RouterNode } from "../../../library/mod.ts";
+import { AuthType, Method } from "../../../library/script/nodes.ts";
 import { IFrontendGenerator } from "../generator.ts";
 import * as path from "https://deno.land/std@0.182.0/path/mod.ts";
+import { generateForm } from "./formgenerator.ts";
 
 export class VanillaGenerator implements IFrontendGenerator {
 
@@ -17,6 +18,7 @@ export class VanillaGenerator implements IFrontendGenerator {
 
         await this.generateLogin();
 
+        await this.generateRouter(this._project);
     }
 
     private createHtmlBoilerplate(body: () => string[]): string[] {
@@ -170,6 +172,37 @@ export class VanillaGenerator implements IFrontendGenerator {
         }
     }
 
+    private async generateRouter(router: RouterNode, currentParentPath?: string) {
+        const parentPath = currentParentPath ? this.combinePaths([currentParentPath, router.path.path]) : router.path.path;
+
+        await Promise.all(router.routes.map(route => {
+            return this.generateRoute(parentPath, route);
+        }));
+
+        await Promise.all(router.routers.map(router => {
+            return this.generateRouter(router, parentPath);
+        }));
+    }
+
+    private async generateRoute(parentPath: string, route: RouteNode) {
+        if (!route.rendering) {
+            return;
+        }
+
+        const code: string[] = [
+            `<div class="card">`,
+            `    <h1>${route.path.alias ?? route.path.path}</h1>`,
+        ];
+
+        if (route.method === Method.Post || route.method === Method.Patch) {
+            code.push(...generateForm(parentPath, route).map((x: string) => `    ${x}`));
+        }
+
+        code.push("</div>");
+
+        await this.createFile(this.translateUrlToPath(this.combinePaths([parentPath, route.method.toLocaleLowerCase() + "_" + route.path.path.substring(1)])) + ".html", this.createHtmlBoilerplate(() => code));
+    } 
+
     private async generateRestScript() {
         const code: string[] = [
             "const API_URL = \"http://localhost:3000\";",
@@ -260,6 +293,178 @@ export class VanillaGenerator implements IFrontendGenerator {
             ".button:active {",
             "    background-color: #3d8c7a;",
             "}",
+            "",
+            ".button.danger {",
+            "    background-color: #e74c3c;",
+            "}",
+            "",
+            ".button.danger:hover {",
+            "    background-color: #c0392b;",
+            "}",
+            "",
+            ".button.danger:active {",
+            "    background-color: #a5281a;",
+            "}",
+            "",
+            ".button.success {",
+            "    background-color: #2ecc71;",
+            "}",
+            "",
+            ".button.success:hover {",
+            "    background-color: #27ae60;",
+            "}",
+            "",
+            ".button.success:active {",
+            "    background-color: #1d834e;",
+            "}",
+            "",
+            "form {",
+            "    display: flex;",
+            "    flex-direction: column;",
+            "    align-items: center;",
+            "    gap: 1rem;",
+            "}",
+            "",
+            ".form-control {",
+            "    display: flex;",
+            "    flex-direction: column;",
+            "    width: 100%;",
+            "}",
+            "",
+            ".form-control > label {",
+            "    font-weight: bold;",
+            "}",
+            "",
+            ".form-control > input {",
+            "    margin-top: 5px;",
+            "}",
+            "",
+            ".form-control > select {",
+            "    margin-top: 5px;",
+            "}",
+            "",
+            ".form-control > textarea {",
+            "    margin-top: 5px;",
+            "}",
+            "",
+            ".form-control > button {",
+            "    margin-top: 5px;",
+            "}",
+            "",
+            ".form-control > .error {",
+            "    color: #e74c3c;",
+            "    font-size: 0.8em;",
+            "}",
+            "",
+            ".form-control > .error::before {",
+            "    content: \"⚠ \";",
+            "}",
+            "",
+            ".form-control > .error::after {",
+            "    content: \"\";",
+            "    display: block;",
+            "    height: 5px;",
+            "}",
+            "",
+            ".form-group {",
+            "    padding: 10px;",
+            "    border: 1px solid #ccc;",
+            "    border-radius: 5px;",
+            "    margin-bottom: 10px;",
+            "    display: flex;",
+            "    flex-direction: column;",
+            "}",
+            ".form-group > * {",
+            "    margin: 5px 0;",
+            "}",
+            ".button-group {",
+            "    display: flex;",
+            "    flex-direction: row;",
+            "    justify-content: flex-end;",
+            "}",
+            ".button-group > * {",
+            "    margin: 0 5px;",
+            "}",
+            "",
+            ".table {",
+            "    width: 100%;",
+            "    border-collapse: collapse;",
+            "}",
+            "",
+            ".table > thead > tr > th,",
+            ".table > tbody > tr > td {",
+            "    border: 1px solid #ccc;",
+            "    padding: 5px;",
+            "}",
+            "",
+            ".table > thead > tr > th {",
+            "    font-weight: bold;",
+            "}",
+            "",
+            ".table > tbody > tr > td {",
+            "    text-align: center;",
+            "}",
+            "",
+            ".table > tbody > tr:nth-child(odd) {",
+            "    background-color: #eee;",
+            "}",
+            "",
+            ".table > tbody > tr:hover {",
+            "    background-color: #ddd;",
+            "}",
+            "",
+            ".table > tbody > tr > td > button:not(.button) {",
+            "    margin: 0;",
+            "    padding: 0;",
+            "    border: 0;",
+            "    background-color: transparent;",
+            "    color: #62d1bd;",
+            "    font-weight: bold;",
+            "    cursor: pointer;",
+            "}",
+            "",
+            ".table > tbody > tr > td > button:not(.button):hover {",
+            "    text-decoration: underline;",
+            "}",
+            "",
+            ".table > tbody > tr > td > button:not(.button):active {",
+            "    color: #4db2a0;",
+            "}",
+            "",
+            ".list {",
+            "    width: 100%;",
+            "    list-style: none;",
+            "    padding: 0;",
+            "}",
+            "",
+            ".list > li {",
+            "    padding: 10px;",
+            "    border: 1px solid #ccc;",
+            "    border-radius: 5px;",
+            "    margin-bottom: 10px;",
+            "}",
+            "",
+            ".list > li > * {",
+            "    margin: 5px 0;",
+            "}",
+            "",
+            ".list > li > button:not(.button) {",
+            "    margin: 0;",
+            "    padding: 0;",
+            "    border: 0;",
+            "    background-color: transparent;",
+            "    color: #62d1bd;",
+            "    font-weight: bold;",
+            "    cursor: pointer;",
+            "}",
+            "",
+            ".list > li > button:not(.button):hover {",
+            "    text-decoration: underline;",
+            "}",
+            "",
+            ".list > li > button:not(.button):active {",
+            "    color: #4db2a0;",
+            "}",
         ];
 
         await this.createFileOnce("styles.css", code);
@@ -274,10 +479,28 @@ export class VanillaGenerator implements IFrontendGenerator {
 
     private async createFile(name: string, content: string[]) {
         const filePath = path.join(this._directory, name);
+
+        const directories = path.dirname(filePath).split(path.SEP);
+        for (let i = 0; i < directories.length; i++) {
+            const directory = directories.slice(0, i + 1).join(path.SEP);
+            if (!await Deno.stat(directory).then(x => x.isDirectory).catch(() => false)) {
+                await Deno.mkdir(directory);
+            }
+        }
+
         await Deno.writeTextFile(filePath, content.join("\n"));
     }
 
     private getLoginAuthBlock(): AuthBlockNode|undefined {
         return Object.values(this._project.authBlocks).find(x => x.type === AuthType.Bearer && x.options["mode"] === "FULL");
+    }
+
+    private combinePaths(paths: string[]): string {
+        return paths.join("/").replace(/\/+/g, "/");
+    }
+
+    private translateUrlToPath(url: string): string {
+        console.log(url);
+        return url.split('/').join('_').replace(/[^a-zA-Z0-9_]/g, "").substring(1);
     }
 }

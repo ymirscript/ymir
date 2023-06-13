@@ -11,7 +11,7 @@ const accounts = [
 class App extends ymir.YmirRestBase {
     
     async validateJwtPayloadForApiKey(payload) {
-        return true;
+        return accounts.find(x => x.id === payload.id);
     }
 
     async getJwtPayloadForApiKey(username, password) {

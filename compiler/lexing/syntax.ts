@@ -103,6 +103,13 @@ export enum SyntaxKind {
     AuthenticatedKeyword,
     AuthenticateKeyword,
     AuthKeyword,
+    ResponseKeyword,
+    ResponsesKeyword,
+    RenderKeyword,
+    TableKeyword,
+    ListKeyword,
+    DetailKeyword,
+    FormKeyword,
     
     // Punctuation
     OpenBraceToken,
