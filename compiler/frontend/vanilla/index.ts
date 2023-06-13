@@ -1,8 +1,11 @@
 import { AuthBlockNode, ProjectNode, RouteNode, RouterNode } from "../../../library/mod.ts";
-import { AuthType, Method } from "../../../library/script/nodes.ts";
+import { AuthType, FrontendType, Method } from "../../../library/script/nodes.ts";
 import { IFrontendGenerator } from "../generator.ts";
 import * as path from "https://deno.land/std@0.182.0/path/mod.ts";
 import { generateForm } from "./formgenerator.ts";
+import { generateList } from "./listgenerator.ts";
+import { generateDetail } from "./detailgenerator.ts";
+import { generateTable } from "./tablegenerator.ts";
 
 export class VanillaGenerator implements IFrontendGenerator {
 
@@ -196,11 +199,28 @@ export class VanillaGenerator implements IFrontendGenerator {
 
         if (route.method === Method.Post || route.method === Method.Patch) {
             code.push(...generateForm(parentPath, route).map((x: string) => `    ${x}`));
+        } else if (route.method === Method.Get) {
+            let integrates: string[] = [];
+            if (route.rendering.options && route.rendering.options["integrate"] && Array.isArray(route.rendering.options["integrate"]) && route.rendering.options["integrate"].every(x => typeof x === "string")) {
+                integrates = route.rendering.options["integrate"] as string[];
+            }
+
+            switch (route.rendering.type) {
+                case FrontendType.List:
+                    code.push(...generateList(parentPath, route, integrates, this._project, this).map((x: string) => `    ${x}`));
+                    break;
+                case FrontendType.Detail:
+                    code.push(...generateDetail(parentPath, route, integrates, this._project, this).map((x: string) => `    ${x}`));
+                    break;
+                case FrontendType.Table:
+                    code.push(...generateTable(parentPath, route, integrates, this._project, this).map((x: string) => `    ${x}`));
+                    break;
+            }
         }
 
         code.push("</div>");
 
-        await this.createFile(this.translateUrlToPath(this.combinePaths([parentPath, route.method.toLocaleLowerCase() + "_" + route.path.path.substring(1)])) + ".html", this.createHtmlBoilerplate(() => code));
+        await this.createFile(this.getRouteFileName(parentPath, route), this.createHtmlBoilerplate(() => code));
     } 
 
     private async generateRestScript() {
@@ -254,7 +274,7 @@ export class VanillaGenerator implements IFrontendGenerator {
             "    border-radius: 5px;",
             "    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);",
             "    padding: 20px;",
-            "    width: 400px;",
+            "    min-width: 400px;",
             "    max-width: 100%;",
             "}",
             "",
@@ -415,6 +435,7 @@ export class VanillaGenerator implements IFrontendGenerator {
             "",
             ".table > tbody > tr > td > button:not(.button) {",
             "    margin: 0;",
+            "    margin-left: 5px;",
             "    padding: 0;",
             "    border: 0;",
             "    background-color: transparent;",
@@ -450,6 +471,7 @@ export class VanillaGenerator implements IFrontendGenerator {
             "",
             ".list > li > button:not(.button) {",
             "    margin: 0;",
+            "    margin-left: 5px;",
             "    padding: 0;",
             "    border: 0;",
             "    background-color: transparent;",
@@ -464,6 +486,10 @@ export class VanillaGenerator implements IFrontendGenerator {
             "",
             ".list > li > button:not(.button):active {",
             "    color: #4db2a0;",
+            "}",
+            "",
+            ".list > li > span {",
+            "    font-weight: bold;",
             "}",
         ];
 
@@ -495,12 +521,15 @@ export class VanillaGenerator implements IFrontendGenerator {
         return Object.values(this._project.authBlocks).find(x => x.type === AuthType.Bearer && x.options["mode"] === "FULL");
     }
 
+    public getRouteFileName(parentPath: string, route: RouteNode): string {
+        return this.translateUrlToPath(this.combinePaths([parentPath, route.method.toLocaleLowerCase() + "_" + route.path.path.substring(1)])) + ".html";
+    }
+
     private combinePaths(paths: string[]): string {
         return paths.join("/").replace(/\/+/g, "/");
     }
 
     private translateUrlToPath(url: string): string {
-        console.log(url);
         return url.split('/').join('_').replace(/[^a-zA-Z0-9_]/g, "").substring(1);
     }
 }

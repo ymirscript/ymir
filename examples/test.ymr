@@ -27,7 +27,7 @@ router /api
 
     GET /persons
         as GetPersons
-        response (
+        responses (
             id: int,
             name: string,
             age: int,
@@ -37,12 +37,22 @@ router /api
             }
         )
         render table(
-            paginate: 20,
-            search: true,
+            integrate: ["UpdatePerson", "DeletePerson", "GetPerson"]
+        )
 
-            // if not specified, the columns are properties of depth 1; with @integrate, the integration actions are added
-            columns: ["id", "name", "age", "address.zipCode", "address.street", "@integrate"],
-            integrate: ["DeletePerson", "UpdatePerson"]
+    GET /person/:id
+        as GetPerson
+        response (
+            id: int,
+            name: string,
+            age: int,
+            address: {
+                zipCode: int,
+                street: string
+            }
+        )
+        render detail(
+            integrate: ["UpdatePerson", "DeletePerson"]
         )
 
     PATCH /person/:id
@@ -56,7 +66,7 @@ router /api
             }
         )
         render form(
-            updateId: ":id"
+            getter: "GetPerson"
         )
 
     DELETE /person/:id

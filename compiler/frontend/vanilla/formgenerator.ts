@@ -18,8 +18,8 @@ export function generateForm(parentPath: string, route: RouteNode): string[] {
     const axiosMethod = route.method === "POST" ? "post" : "patch";
     let axiosUrl = `${parentPath}${parentPath.endsWith("/") ? '' : '/'}${(route.path.path.startsWith("/") ? route.path.path.substring(1) : route.path.path)}`;
 
-    if (route.rendering.options && route.rendering.options["updateId"] && typeof route.rendering.options["updateId"] === "string") {
-        axiosUrl = axiosUrl.replace(route.rendering.options["updateId"], "${id}");
+    if (axiosUrl.includes(":id")) {
+        axiosUrl = axiosUrl.replace(":id", "${id}");
     }
 
     const html: string[] = [];

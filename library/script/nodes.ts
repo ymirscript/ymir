@@ -141,21 +141,25 @@ export class RouterNode extends SyntaxNode {
      * @param alias The alias of the route to find.
      * @returns The route with the given alias or undefined if no route with the given alias exists.
      */
-    public findRouteByAlias(alias: string): RouteNode | undefined {
+    public findRouteByAlias(alias: string, parentPath?: string): [RouteNode, string] | undefined {
         for (const route of this.routes) {
             if (route.path.alias === alias) {
-                return route;
+                return [route, parentPath ?? ""];
             }
         }
 
         for (const router of this.routers) {
-            const route = router.findRouteByAlias(alias);
+            const route = router.findRouteByAlias(alias, this.combinePaths([parentPath ?? "", router.path.path]));
             if (route !== undefined) {
                 return route;
             }
         }
 
         return undefined;
+    }
+
+    private combinePaths(paths: string[]): string {
+        return paths.filter(x => x.trim().length > 0).join("/").replace(/\/+/g, "/");
     }
 }
 
