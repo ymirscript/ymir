@@ -98,7 +98,6 @@ export function generateTable(parentPath: string, route: RouteNode, integrates: 
         "        </tr>",
         "    </thead>",
         "    <tbody id=\"tablebody\">",
-        "       <tr>Loading...</tr>",
         "    </tbody>",
         "</table>",
         "<script>",

@@ -150,7 +150,7 @@ export default class JavaScriptExpressJsTargetPlugin extends PluginBase {
                     `${routerName}.use(async (req, res, next) => {`,
                     `    const authResult = await this.#handle${this._authHandlers[routerNode.authenticate.authBlock]}Authentication(req, res);`,
                     "    if (authResult === undefined) {",
-                    "        return;",
+                    "        return false;",
                     "    }",
                 ]);
     
@@ -159,7 +159,7 @@ export default class JavaScriptExpressJsTargetPlugin extends PluginBase {
                         `    const isAuthorized = await this.authorize${this._authHandlers[routerNode.authenticate.authBlock]}(authResult, [${routerNode.authenticate.authorization.join(", ")}]);`,
                         "    if (!isAuthorized) {",
                         "        res.status(403).send(messages._403);",
-                        "        return;",
+                        "        return false;",
                         "    }",
                     ]);
                 }
@@ -564,7 +564,7 @@ export default class JavaScriptExpressJsTargetPlugin extends PluginBase {
             output.push(...[
                 `    const authResult = await this.#handle${this._authHandlers[route.authenticate.authBlock]}Authentication(req, res);`,
                 "    if (authResult === undefined) {",
-                "        return;",
+                "        return false;",
                 "    }",
             ]);
 
@@ -573,7 +573,7 @@ export default class JavaScriptExpressJsTargetPlugin extends PluginBase {
                     `    const isAuthorized = await this.authorize${this._authHandlers[route.authenticate.authBlock]}(req, [${route.authenticate.authorization.join(", ")}]);`,
                     "    if (!isAuthorized) {",
                     "        res.status(403).send(messages._403);",
-                    "        return;",
+                    "        return false;",
                     "    }",
                 ]);
             }
@@ -581,7 +581,7 @@ export default class JavaScriptExpressJsTargetPlugin extends PluginBase {
             output.push(...[
                 `    const authResult = await this.#handle${this._authHandlers[this._defaultAuthenticate]}Authentication(req, res);`,
                 "    if (authResult === undefined) {",
-                "        return;",
+                "        return false;",
                 "    }",
             ]);
         }
