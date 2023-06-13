@@ -1,7 +1,6 @@
 import * as pathApi from "https://deno.land/std@0.182.0/path/mod.ts";
 
 import { AuthBlockNode, GlobalVariable, IPluginContext, Logger, MiddlewareNode, MiddlewareOptions, PathNode, PluginBase, RouteNode, RouterNode, AuthType, ProjectNode, AbortError, BearerAuthGenerationMode } from "../../library/mod.ts";
-import { def } from "https://deno.land/std@0.182.0/yaml/schema/default.ts";
 
 export default class JavaScriptExpressJsTargetPlugin extends PluginBase {
 
