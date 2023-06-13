@@ -134,6 +134,33 @@ export class RouterNode extends SyntaxNode {
         this.body = body;
         this.authenticate = authenticate;
     }
+
+    /**
+     * Finds a route by its alias.
+     * 
+     * @param alias The alias of the route to find.
+     * @returns The route with the given alias or undefined if no route with the given alias exists.
+     */
+    public findRouteByAlias(alias: string, parentPath?: string): [RouteNode, string] | undefined {
+        for (const route of this.routes) {
+            if (route.path.alias === alias) {
+                return [route, parentPath ?? ""];
+            }
+        }
+
+        for (const router of this.routers) {
+            const route = router.findRouteByAlias(alias, this.combinePaths([parentPath ?? "", router.path.path]));
+            if (route !== undefined) {
+                return route;
+            }
+        }
+
+        return undefined;
+    }
+
+    private combinePaths(paths: string[]): string {
+        return paths.filter(x => x.trim().length > 0).join("/").replace(/\/+/g, "/");
+    }
 }
 
 /**
@@ -210,7 +237,22 @@ export class RouteNode extends SyntaxNode {
      */
     public readonly description?: string;
 
-    constructor(method: Method, path: PathNode, header?: MiddlewareOptions, body?: MiddlewareOptions, authenticate?: AuthenticateClauseNode, description?: string) {
+    /**
+     * Optional response entitiy representation defined through middleware options used for frontend code generation.
+     */
+    public readonly response?: MiddlewareOptions;
+
+    /**
+     * Whether the response is a single entity or a list of entities.
+     */
+    public readonly isResponsePlural?: boolean;
+
+    /**
+     * The frontend code generation block.
+     */
+    public readonly rendering?: RenderBlock;
+
+    constructor(method: Method, path: PathNode, header?: MiddlewareOptions, body?: MiddlewareOptions, authenticate?: AuthenticateClauseNode, description?: string, reponse?: MiddlewareOptions, isResponsePlural?: boolean, rendering?: RenderBlock) {
         super();
         this.path = path;
         this.method = method;
@@ -218,6 +260,31 @@ export class RouteNode extends SyntaxNode {
         this.body = body;
         this.authenticate = authenticate;
         this.description = description;
+        this.response = reponse;
+        this.isResponsePlural = isResponsePlural;
+        this.rendering = rendering;
+    }
+}
+
+/**
+ * The render block node describes a render block in the project. It holds information about the frontend code generation.
+ */
+export class RenderBlock extends SyntaxNode {
+
+    /**
+     * The type of the frontend code generation.
+     */
+    public readonly type: FrontendType;
+
+    /**
+     * Optional options that are used in the frontend code generation.
+     */
+    public readonly options?: MiddlewareOptions;
+
+    constructor(type: FrontendType, options?: MiddlewareOptions) {
+        super();
+        this.type = type;
+        this.options = options;
     }
 }
 
@@ -399,4 +466,11 @@ export enum BearerAuthGenerationMode {
      * Generates everything.
      */
     Full = 'FULL',
+}
+
+export enum FrontendType {
+    List = "list",
+    Table = "table",
+    Detail = "detail",
+    Form = "form"
 }

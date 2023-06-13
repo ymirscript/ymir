@@ -419,6 +419,13 @@ export const RuleSet: ISyntaxRule[] = [
     new PatternSyntaxRule("authenticated", SyntaxKind.AuthenticatedKeyword),
     new PatternSyntaxRule("authenticate", SyntaxKind.AuthenticateKeyword),
     new PatternSyntaxRule("auth", SyntaxKind.AuthKeyword),
+    new PatternSyntaxRule("response", SyntaxKind.ResponseKeyword),
+    new PatternSyntaxRule("responses", SyntaxKind.ResponsesKeyword),
+    new PatternSyntaxRule("render", SyntaxKind.RenderKeyword),
+    new PatternSyntaxRule("table", SyntaxKind.TableKeyword),
+    new PatternSyntaxRule("list", SyntaxKind.ListKeyword),
+    new PatternSyntaxRule("detail", SyntaxKind.DetailKeyword),
+    new PatternSyntaxRule("form", SyntaxKind.FormKeyword),
 
     new CharSyntaxRule("(", SyntaxKind.OpenParenToken),
     new CharSyntaxRule(")", SyntaxKind.CloseParenToken),

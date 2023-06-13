@@ -10,13 +10,9 @@ auth Bearer as apiKey (
     withLogout: true
 );
 
-router /auth 
+router /api 
     as apiRouter
 {
-    // Prints the Hello message with the Name concatenated
-    GET /hello/:name
-        as HelloRoute
-
     POST /person
         as CreatePerson
         body (
@@ -27,14 +23,52 @@ router /auth
                 street: string
             }
         )
+        render form
 
-    router /v2
-    {
-        include "include.ymr"
-    }
-}
+    GET /persons
+        as GetPersons
+        responses (
+            id: int,
+            name: string,
+            age: int,
+            address: {
+                zipCode: int,
+                street: string
+            }
+        )
+        render table(
+            integrate: ["UpdatePerson", "DeletePerson", "GetPerson"]
+        )
 
-router /another-router
-{
-    GET /test;
+    GET /person/:id
+        as GetPerson
+        response (
+            id: int,
+            name: string,
+            age: int,
+            address: {
+                zipCode: int,
+                street: string
+            }
+        )
+        render detail(
+            integrate: ["UpdatePerson", "DeletePerson"]
+        )
+
+    PATCH /person/:id
+        as UpdatePerson
+        body (
+            name: string,
+            age: int,
+            address: {
+                zipCode: int,
+                street: string
+            }
+        )
+        render form(
+            getter: "GetPerson"
+        )
+
+    DELETE /person/:id
+        as DeletePerson
 }

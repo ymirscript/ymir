@@ -1,7 +1,7 @@
 // deno-lint-ignore-file no-inferrable-types
 import * as pathApi from "https://deno.land/std@0.182.0/path/mod.ts";
 
-import { GlobalVariable, Method, MiddlewareNode, MiddlewareOptionValue, ProjectNode, QueryParameterType, RouteNode, Logger, MiddlewareOptions, PathNode, QueryParameterNode, RouterNode, YmirFileKind, AuthBlockNode, AuthType, AuthenticateClauseNode } from "../../library/mod.ts";
+import { GlobalVariable, Method, MiddlewareNode, MiddlewareOptionValue, ProjectNode, QueryParameterType, RouteNode, Logger, MiddlewareOptions, PathNode, QueryParameterNode, RouterNode, YmirFileKind, AuthBlockNode, AuthType, AuthenticateClauseNode, RenderBlock, FrontendType } from "../../library/mod.ts";
 import { CommentDictionary, SourcePosition, SourceSpan, SyntaxKind } from "../lexing/syntax.ts";
 import { ISyntaxToken, IStringToken, INumericToken, IBooleanToken } from "../lexing/tokens.ts";
 import { DiagnosticSink } from "./diagnostics.ts";
@@ -377,10 +377,16 @@ export class Parser {
         let body: MiddlewareOptions|undefined;
         let header: MiddlewareOptions|undefined;
         let authenticate: AuthenticateClauseNode|undefined;
+        let response: MiddlewareOptions|undefined;
+        let pluralResponse = false;
+        let renderBlock: RenderBlock|undefined;
 
         while (this._context.currentToken.kind === SyntaxKind.HeaderKeyword 
             || this._context.currentToken.kind === SyntaxKind.BodyKeyword
-            || this._context.currentToken.kind === SyntaxKind.AuthenticateKeyword) {
+            || this._context.currentToken.kind === SyntaxKind.AuthenticateKeyword
+            || this._context.currentToken.kind === SyntaxKind.ResponseKeyword
+            || this._context.currentToken.kind === SyntaxKind.ResponsesKeyword
+            || this._context.currentToken.kind === SyntaxKind.RenderKeyword) {
             const current = this._context.currentToken;
 
             this._context.jump();
@@ -393,6 +399,14 @@ export class Parser {
                 body = this.parseMiddlewareOptions();
             } else if (current.kind === SyntaxKind.AuthenticateKeyword) {
                 authenticate = this.parseAuthenticateClause();
+            } else if (current.kind === SyntaxKind.ResponseKeyword || current.kind === SyntaxKind.ResponsesKeyword) {
+                if (current.kind === SyntaxKind.ResponsesKeyword) {
+                    pluralResponse = true;
+                }
+
+                response = this.parseMiddlewareOptions();
+            } else if (current.kind === SyntaxKind.RenderKeyword) {
+                renderBlock = this.parseRenderBlock();
             }
 
             if (this._context.currentToken === start) {
@@ -402,7 +416,20 @@ export class Parser {
 
         this._context.matchToken(SyntaxKind.SemicolonToken, true);
 
-        return new RouteNode(method, path, header, body, authenticate, comment);
+        return new RouteNode(method, path, header, body, authenticate, comment, response, pluralResponse, renderBlock);
+    }
+
+    private parseRenderBlock(): RenderBlock|undefined {
+        const typeStr = this._context.matchTokens([SyntaxKind.TableKeyword, SyntaxKind.ListKeyword, SyntaxKind.DetailKeyword, SyntaxKind.FormKeyword], false, "table|list|detail|form");
+        const type: FrontendType = typeStr.text as FrontendType;
+
+        let options: MiddlewareOptions|undefined;
+        if (this._context.currentToken.kind === SyntaxKind.OpenParenToken) {
+            options = this.parseMiddlewareOptions();
+        }
+        
+        return new RenderBlock(type, options);
+
     }
 
     private parseAuthenticateClause(): AuthenticateClauseNode|undefined {
@@ -739,6 +766,34 @@ export class ParserContext {
         const token = this.currentToken;
         this.jump();
         return token;
+    }
+
+    public matchTokens(kinds: SyntaxKind[], optional: boolean = false, hint?: string): ISyntaxToken {
+        const current = this.currentToken;
+
+        Logger.debug("Matching kind: " + kinds.map(kind => this._diagnostics.transformSyntaxKind(kind)).join('|') + " with current kind: " + this._diagnostics.transformSyntaxKind(current.kind) + " value: " + current.text);
+
+        if (kinds.includes(current.kind)) {
+            return this.readToken();
+        }
+
+        if (optional) {
+            return {
+                kind: kinds[0],
+                text: "",
+                column: current.column,
+                line: current.line
+            };
+        }
+
+        this._diagnostics.reportError(new SourcePosition(this.workingFile, new SourceSpan(current.line ?? - 1, 1), current.column), `Expected token of kinds ${kinds.map(kind => this._diagnostics.transformSyntaxKind(kind)).join('|')} but got ${this._diagnostics.transformSyntaxKind(current.kind)} instead.`, hint);
+
+        return {
+            kind: kinds[0],
+            text: "",
+            column: current.column,
+            line: current.line
+        };
     }
 
     public matchToken(kind: SyntaxKind, optional: boolean = false, hint?: string): ISyntaxToken {
