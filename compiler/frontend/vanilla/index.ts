@@ -198,7 +198,7 @@ export class VanillaGenerator implements IFrontendGenerator {
         ];
 
         if (route.method === Method.Post || route.method === Method.Patch) {
-            code.push(...generateForm(parentPath, route).map((x: string) => `    ${x}`));
+            code.push(...generateForm(parentPath, route, this._project).map((x: string) => `    ${x}`));
         } else if (route.method === Method.Get) {
             let integrates: string[] = [];
             if (route.rendering.options && route.rendering.options["integrate"] && Array.isArray(route.rendering.options["integrate"]) && route.rendering.options["integrate"].every(x => typeof x === "string")) {
