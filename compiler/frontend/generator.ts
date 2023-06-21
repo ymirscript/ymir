@@ -2,9 +2,11 @@ import { Logger, ProjectNode } from "../../library/mod.ts";
 import { IFrontendConfig } from "../config.ts";
 import * as path from "https://deno.land/std@0.182.0/path/mod.ts";
 import { VanillaGenerator } from "./vanilla/index.ts";
+import { JavaGlueCodeGenerator } from "./glue/java.ts";
 
 const FRONTEND_GENERATORS: {[key: string]: IFrontendGenerator} = {
-    "vanilla": new VanillaGenerator
+    "vanilla": new VanillaGenerator(),
+    "java_glue": new JavaGlueCodeGenerator()
 };
 
 export interface IFrontendGenerator {

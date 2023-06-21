@@ -779,7 +779,7 @@ export default class JavaSpringBootTargetPlugin extends PluginBase {
     }
 }
 
-class ClassBuilder {
+export class ClassBuilder {
 
     private readonly _imports: string[] = [];
     private readonly _annotations: string[] = [];
@@ -893,7 +893,7 @@ class ClassBuilder {
     }
 }
 
-class MethodBuilder {
+export class MethodBuilder {
 
     private readonly _parameters: FieldBuilder[] = [];
     private readonly _annotations: string[] = [];
@@ -986,7 +986,7 @@ class MethodBuilder {
     }
 }
 
-class FieldBuilder {
+export class FieldBuilder {
 
     private readonly _annotations: string[] = [];
     private _value: string;

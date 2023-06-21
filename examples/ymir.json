@@ -11,6 +11,6 @@
         }
     },
     "frontend": {
-        "mode": "vanilla"
+        "mode": "java_glue"
     }
 }
