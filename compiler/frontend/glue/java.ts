@@ -50,7 +50,7 @@ export class JavaGlueCodeGenerator implements IFrontendGenerator {
         const responseDto = route.response ? await this.compileBodyOptionsAsDto(createdDtos, route.response, `${this.urlToJavaName(completeRoute)}ResponseDto`) : undefined;
         const requestDto = route.body ? await this.compileBodyOptionsAsDto(createdDtos, route.body, `${this.urlToJavaName(completeRoute)}RequestDto`) : undefined;
 
-        const method = new MethodBuilder(this.makeCamelCase(this.enusreJavaAllowedName(route.path.alias ?? route.path.path)), responseDto ?? "void", "public static");
+        const method = new MethodBuilder(this.makeCamelCase(this.enusreJavaAllowedName(route.path.alias ?? route.path.path)), responseDto ? (route.isResponsePlural === true ? responseDto : responseDto + "[]") : "void", "public static");
 
         const urlParamsNames = route.path.path.split("/").filter(x => x.startsWith(":")).map(x => x.substring(1));
         const urlParamsMapping: {[key: string]: string} = {};
@@ -126,9 +126,11 @@ export class JavaGlueCodeGenerator implements IFrontendGenerator {
 
                     classBuilder.addField(new FieldBuilder(this.makeCamelCase(this.enusreJavaAllowedName(key)), className));
                     classBuilder.addMethod(new MethodBuilder(`get${this.makePascalCase(key)}`, className).addBodyLine(`return this.${this.makeCamelCase(this.enusreJavaAllowedName(key))};`));
+                    classBuilder.addMethod(new MethodBuilder(`set${this.makePascalCase(key)}`, "void").addParameter(new FieldBuilder(this.makeCamelCase(this.enusreJavaAllowedName(key)), className)).addBodyLine(`this.${this.makeCamelCase(this.enusreJavaAllowedName(key))} = ${this.makeCamelCase(this.enusreJavaAllowedName(key))};`));
                 } else if (typeof options[key] === "string") {
                     classBuilder.addField(new FieldBuilder(this.makeCamelCase(this.enusreJavaAllowedName(key)), this.getJavaTypeOfType(options[key] as string)));
                     classBuilder.addMethod(new MethodBuilder(`get${this.makePascalCase(key)}`, this.getJavaTypeOfType(options[key] as string)).addBodyLine(`return this.${this.makeCamelCase(this.enusreJavaAllowedName(key))};`));
+                    classBuilder.addMethod(new MethodBuilder(`set${this.makePascalCase(key)}`, "void").addParameter(new FieldBuilder(this.makeCamelCase(this.enusreJavaAllowedName(key)), this.getJavaTypeOfType(options[key] as string))).addBodyLine(`this.${this.makeCamelCase(this.enusreJavaAllowedName(key))} = ${this.makeCamelCase(this.enusreJavaAllowedName(key))};`));
                 }
             }
 
@@ -187,7 +189,7 @@ export class JavaGlueCodeGenerator implements IFrontendGenerator {
                 .addBodyLine("Map<String, String> response = RestClient.post(\"" + loginPath + "\", payload, headers, null, Map.class);")
                 .addBodyLine("authToken = response.get(\"token\");");
         } else {
-            throw new Error(`Unknown login source '${loginSource}'.`);
+            throw new Error(`Unknown login source '${loginSource}'. Only 'body', 'header' and 'query' are allowed.`);
         }
                 
 
